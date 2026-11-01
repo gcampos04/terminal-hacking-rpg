@@ -11,6 +11,8 @@ export const test = base.extend({
     page.on('pageerror', (e) => erros.push(e.message));
     page.on('console', (m) => { if (m.type() === 'error') erros.push(m.text()); });
     await use(page);
+    const texto = await page.locator('body').innerText({ timeout: 1000 }).catch(() => '');
+    expect(texto, 'objeto impresso como texto').not.toContain('[object ');
     expect(erros, 'erros no console da página').toEqual([]);
   }
 });

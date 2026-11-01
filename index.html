@@ -148,6 +148,10 @@ html[data-urgente="1"] .relogio{color:var(--perigo);animation:pisca .6s infinite
 .campo small{opacity:.65;font-size:11.5px}
 .chk{display:flex;gap:8px;align-items:center;font-size:13.5px;cursor:pointer}
 .chk input{width:auto}
+.chk-linha{display:flex;gap:6px;align-items:center}
+.dica{display:inline-grid;place-items:center;width:17px;height:17px;min-height:0;padding:0;margin-left:5px;border:1px solid var(--p);border-radius:50%;background:none;color:var(--p);font-size:11px;line-height:1;vertical-align:middle;cursor:help;flex:none}
+.balao{position:fixed;z-index:70;max-width:min(320px,calc(100vw - 16px));padding:9px 12px;background:var(--f);border:1px solid var(--p);color:var(--p);font-size:13px;line-height:1.45;box-shadow:0 4px 18px #000a}
+.regra{display:block;opacity:.75;font-size:12.5px;margin:0 0 10px}
 fieldset{border:1px solid var(--b);padding:12px;margin:12px 0 0;min-width:0}
 legend{color:var(--p);font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:0 6px}
 .vivo-no{display:grid;gap:6px;padding:9px 0;border-bottom:1px dashed var(--b)}
@@ -416,6 +420,38 @@ const NOMES_CONSEQ = { travar: 'Travar até o mestre liberar', travarTempo: 'Tra
 const NOMES_FINAL = { desligar: 'Desligar', corromper: 'Corromper', explodir: 'Explodir', nada: 'Nada (só zera)' };
 const ROTULOS_SOM = { alarme: 'Alarme', sirene: 'Sirene', aviso: 'Aviso', glitch: 'Glitch', estatica: 'Estática', estabiliza: 'Estabilizar', acesso: 'Acesso liberado', erro: 'Erro', trava: 'Trava', portaAbre: 'Porta abrindo', portaFecha: 'Porta fechando', desliga: 'Desligar', vidro: 'Vidro quebrando', explosao: 'Explosão', boot: 'Boot' };
 const TAG_PUZZLE = { breach: 'Breach', palavras: 'Palavras', circuito: 'Circuito', cripto: 'Criptograma', memoria: 'Memória', aleatorio: 'Aleatório' };
+const TEXTO_DV = 'Valor de Dificuldade. É o número que a rolagem precisa superar: d10 + modificador contra o DV. Quanto maior o DV, mais difícil.';
+const TEXTO_MACRO = 'Macro é um conjunto de efeitos disparado de uma vez: atmosfera, sinal, glitch, som, aviso e contagem.';
+const DICAS = {
+  DV: TEXTO_DV, 'DV do teste': TEXTO_DV, 'DV para forçar': TEXTO_DV, 'Dificuldade do teste (DV)': TEXTO_DV, 'Empate com o DV passa': 'Ligado: tirar exatamente o DV conta como sucesso. Desligado: é preciso passar do DV.',
+  '10 e 1 no d10 rolam mais um dado': 'd10 é um dado de dez lados. Com a opção ligada, tirar 10 soma mais um d10, e tirar 1 subtrai mais um d10.',
+  Rolagens: 'Regras do dado usado em Forçar acesso, Teste de perícia e Decriptar: d10 + modificador contra o DV.',
+  Modificador: 'Some o atributo e a perícia da sua ficha. O número entra na rolagem junto com o d10.',
+  CRT: 'Imita a tela de um monitor antigo de tubo, com linhas horizontais. Leve e Pesado mudam a intensidade.',
+  'Degradação de sinal': 'Deixa a imagem instável, como uma transmissão com interferência. É o valor usado no início da sessão.',
+  Sinal: 'Muda a degradação da imagem quando a macro dispara. "Sem mudança" mantém o valor atual.',
+  'Glitch (ms)': 'Tempo da falha visual na tela, em milissegundos. 1000 ms equivalem a 1 segundo. Com 0, não há glitch.',
+  Atmosfera: 'Clima de cor do terminal: Normal, Aviso ou Crítico.',
+  Macros: TEXTO_MACRO,
+  'Macro ao abrir': TEXTO_MACRO + ' Esta dispara uma vez, quando o jogador abre o nó.',
+  'Macro na falha': TEXTO_MACRO + ' Esta dispara quando o jogador erra ou o tempo acaba.',
+  'Macro no sucesso': TEXTO_MACRO + ' Esta dispara quando o jogador passa pela proteção.',
+  'Sequência de boot': 'Boot é a tela de inicialização, com textos que aparecem antes de o jogador entrar no terminal.',
+  Frequência: 'Define quando o boot aparece: uma vez em cada sessão do navegador ou sempre que a página abre.',
+  Camadas: 'Quantos sucessos são necessários para revelar o texto inteiro. Cada sucesso revela uma parte.',
+  'Mostrar embaralhado até decriptar': 'O jogador vê o texto cifrado no lugar de um bloqueio. Decriptar é transformar esse texto em algo legível.',
+  'Permitir forçar acesso': 'Mostra o botão FORÇAR ACESSO: uma rolagem contra o DV abre a proteção sem resolver o minigame.',
+  'Teste de perícia antes do jogo': 'O jogador rola antes do minigame. Passar reduz a dificuldade em um nível, e falhar aumenta em um nível.',
+  Minigame: 'O desafio que o jogador resolve para abrir o nó. Cada tipo mostra como jogar na própria tela.',
+  'Máximo de erros': 'Quantos erros o jogador pode cometer antes da consequência. Com 0, os erros são ilimitados.',
+  BUFFER: 'Memória temporária do ataque. Cada código escolhido ocupa um espaço, e o hack falha quando ela enche.',
+  SEQ: 'Sequência de códigos que você precisa colocar no buffer, nessa ordem e sem outro código no meio.',
+  'Quebra de Protocolo': 'Escolha códigos alternando entre a linha e a coluna destacadas. Complete todas as sequências antes de o buffer encher.',
+  'Matriz de Palavras': 'Ache a senha entre as palavras. Cada erro mostra quantas letras estão na posição certa. Blocos entre colchetes ajudam.',
+  'Relé de Circuito': 'Gire as peças para ligar a fonte a todos os destinos.',
+  Criptograma: 'Cada letra da frase foi trocada por outra. Descubra qual é a letra real de cada uma.',
+  'Matriz de Memória': 'Veja a sequência acesa e repita na mesma ordem.'
+};
 const NOMES_STATUS = { ativo: 'ATIVO', resolvido: 'LIBERADO', travado: 'TRAVADO', quebrado: 'QUEBRADO' };
 
 let cenario, prog, embutido = null, NS = 'nt.base';
@@ -1006,7 +1042,7 @@ function telaIntroHack(n) {
   const tipoNome = p.puzzle === 'aleatorio' ? 'Protocolo desconhecido' : NOMES_PUZZLE[p.puzzle];
   const precisaTeste = p.teste.ativo && !s.testeFeito;
   return caixa(n.nome,
-    h('div', { class: 'linha-meta' }, h('span', {}, tipoNome), h('span', {}, 'Dificuldade: ' + NOMES_DIF[difEfetiva(n)]), h('span', {}, metaTentativas(n)), Number(p.tempo) > 0 ? h('span', {}, 'Tempo: ' + p.tempo + 's') : null),
+    h('div', { class: 'linha-meta' }, h('span', {}, tipoNome, dica(tipoNome)), h('span', {}, 'Dificuldade: ' + NOMES_DIF[difEfetiva(n)]), h('span', {}, metaTentativas(n)), Number(p.tempo) > 0 ? h('span', {}, 'Tempo: ' + p.tempo + 's') : null),
     p.intro ? h('p', { class: 'leitura' }, p.intro) : h('p', {}, 'Sistema protegido. Inicie o ataque quando estiver pronto.'),
     h('div', { class: 'acoes' },
       precisaTeste ? h('button', { class: 'forte', onclick: () => { modal.etapa = 'teste'; renderModal(); } }, 'TESTE DE PERÍCIA') : h('button', { class: 'forte', onclick: () => iniciaJogo(n) }, 'INICIAR HACK'),
@@ -1023,7 +1059,7 @@ function iniciaJogo(n) {
   const area = h('div', {});
   const meta = h('span', { id: 'jogo-tent' }, metaTentativas(n));
   const barra = tempo > 0 ? h('div', { class: 'barra' }, h('i', { id: 'prazo-barra', style: 'width:100%' })) : null;
-  tela(caixa(n.nome, h('div', { class: 'linha-meta' }, h('span', {}, NOMES_PUZZLE[puzzle.tipo] + ' · ' + NOMES_DIF[difEfetiva(n)]), meta, tempo > 0 ? h('span', { id: 'prazo-txt' }) : null), barra, area));
+  tela(caixa(n.nome, h('div', { class: 'linha-meta' }, h('span', {}, NOMES_PUZZLE[puzzle.tipo] + ' · ' + NOMES_DIF[difEfetiva(n)], dica(NOMES_PUZZLE[puzzle.tipo])), meta, tempo > 0 ? h('span', { id: 'prazo-txt' }) : null), barra, area));
   const reavalia = () => { modal.jogo = false; if (modal.etapa === 'jogo') modal.etapa = 'intro'; };
   Jogos[puzzle.tipo](area, puzzle, {
     replays: Number(n.protecao.replays),
@@ -1069,7 +1105,8 @@ function telaRolagem(n, titulo, dv, nota, aoFim) {
     concluir(passou, 'd10 [' + r.partes.join(' ') + '] ' + (m >= 0 ? '+ ' : '- ') + Math.abs(m) + ' = ' + total + ' contra ' + dv);
   };
   botoes.append(h('button', { class: 'forte', onclick: rolar }, 'ROLAR D10'), h('button', { onclick: () => concluir(true, 'Resultado da mesa') }, 'NA MESA: PASSEI'), h('button', { onclick: () => concluir(false, 'Resultado da mesa') }, 'NA MESA: FALHEI'));
-  return caixa(titulo, h('p', {}, nota), h('div', { class: 'campo' }, h('span', {}, 'Modificador (atributo + perícia)'), mod), saida, botoes);
+  const regra = 'Rolagem: d10 + modificador. ' + (cenario.rolagem.empatePassa ? 'Precisa igualar ou superar' : 'Precisa superar') + ' o DV, a dificuldade definida pelo mestre.';
+  return caixa(titulo, h('p', {}, nota), h('small', { class: 'regra' }, regra, dica('DV')), h('div', { class: 'campo' }, h('span', {}, 'Modificador (atributo + perícia)', dica('Modificador')), mod), saida, botoes);
 }
 function hashTexto(t) { let x = 2166136261; for (let i = 0; i < t.length; i++) { x ^= t.charCodeAt(i); x = Math.imul(x, 16777619) >>> 0; } return x; }
 function embaralha(texto, revelados, sem) {
@@ -1126,9 +1163,9 @@ const Jogos = {
         } }, v));
       }));
       el.replaceChildren(
-        h('div', { class: 'fila' }, h('span', {}, 'BUFFER'), Array.from({ length: p.buffer }, (_, i) => cod(buf[i]))),
+        h('div', { class: 'fila' }, h('span', {}, 'BUFFER', dica('BUFFER')), Array.from({ length: p.buffer }, (_, i) => cod(buf[i]))),
         h('p', { style: 'margin:6px 0' }, porLinha ? 'SELECIONE NA LINHA ' + (ativo + 1) : 'SELECIONE NA COLUNA ' + (ativo + 1)), grade,
-        p.daemons.map((s, i) => h('div', { class: 'fila' + (feito(s) ? ' feito' : '') }, h('span', {}, 'SEQ ' + (i + 1)), s.map((v) => cod(v)), feito(s) ? h('span', { class: 'ok' }, 'INJETADA') : null)));
+        ...p.daemons.map((s, i) => h('div', { class: 'fila' + (feito(s) ? ' feito' : '') }, h('span', {}, 'SEQ ' + (i + 1), i ? null : dica('SEQ')), s.map((v) => cod(v)), feito(s) ? h('span', { class: 'ok' }, 'INJETADA') : null)));
       if (fim && p.daemons.every(feito)) el.append(h('div', { class: 'grande ok' }, 'BREACH COMPLETO'));
     };
     desenha();
@@ -1320,9 +1357,33 @@ function confirmar(txt, sim) {
   tela(h('div', { class: 'caixa', role: 'alertdialog', 'aria-modal': 'true', style: 'width:min(460px,100%)' }, h('div', { class: 'corpo' }, h('p', {}, txt),
     h('div', { class: 'acoes' }, h('button', { class: 'risco', onclick: () => { fecha(); sim(); } }, 'CONFIRMAR'), h('button', { onclick: fecha }, 'CANCELAR')))));
 }
+let balao = null;
+function fechaDica() { if (balao) { balao.remove(); balao = null; } }
+function abreDica(alvo, txt, fixo) {
+  fechaDica();
+  balao = h('div', { class: 'balao', role: 'tooltip' }, txt);
+  balao.alvo = alvo; balao.fixo = fixo;
+  document.body.append(balao);
+  posicionaDica();
+}
+function posicionaDica() {
+  if (!balao) return;
+  if (!balao.alvo.isConnected) { fechaDica(); return; }
+  const r = balao.alvo.getBoundingClientRect(), b = balao.getBoundingClientRect();
+  balao.style.left = Math.max(8, Math.min(r.left, innerWidth - b.width - 8)) + 'px';
+  balao.style.top = (r.bottom + 6 + b.height > innerHeight ? Math.max(8, r.top - b.height - 6) : r.bottom + 6) + 'px';
+}
+function dica(chave) {
+  const txt = DICAS[chave];
+  if (!txt) return null;
+  return h('button', { type: 'button', class: 'dica', 'aria-label': 'O que é ' + chave + '?',
+    onclick: (e) => { e.preventDefault(); e.stopPropagation(); const el = e.currentTarget; if (balao && balao.alvo === el && balao.fixo) fechaDica(); else abreDica(el, txt, true); },
+    onpointerenter: (e) => { if (e.pointerType === 'mouse' && !(balao && balao.fixo)) abreDica(e.currentTarget, txt, false); },
+    onpointerleave: () => { if (balao && !balao.fixo) fechaDica(); } }, '?');
+}
 function campo(rotulo, el, nota, todo) {
   if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', rotulo);
-  return h('div', { class: 'campo' + (todo ? ' todo' : '') }, h('span', {}, rotulo), el, nota ? h('small', {}, nota) : null);
+  return h('div', { class: 'campo' + (todo ? ' todo' : '') }, h('span', {}, rotulo, dica(rotulo)), el, nota ? h('small', {}, nota) : null);
 }
 const entradaTexto = (obj, k, aoMudar, attrs) => h('input', { type: 'text', value: obj[k] ?? '', oninput: (e) => { obj[k] = e.target.value; salvaCenario(); if (aoMudar) aoMudar(e.target); }, ...attrs });
 const entradaNum = (obj, k, attrs = {}) => {
@@ -1337,7 +1398,10 @@ const entradaNum = (obj, k, attrs = {}) => {
 };
 const areaTexto = (obj, k) => h('textarea', { oninput: (e) => { obj[k] = e.target.value; salvaCenario(); } }, obj[k] || '');
 const selecao = (obj, k, ops, reabre, bloqueadas = []) => h('select', { onchange: (e) => { obj[k] = e.target.value; salvaCenario(); if (reabre) render(); } }, Object.entries(ops).map(([v, t]) => h('option', { value: v, selected: String(obj[k]) === v, disabled: bloqueadas.includes(v) }, t)));
-const marca = (obj, k, txt, reabre) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: obj[k], onchange: (e) => { obj[k] = e.target.checked; salvaCenario(); if (reabre) render(); } }), txt);
+const marca = (obj, k, txt, reabre) => {
+  const rotulo = h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: obj[k], onchange: (e) => { obj[k] = e.target.checked; salvaCenario(); if (reabre) render(); } }), txt);
+  return DICAS[txt] ? h('span', { class: 'chk-linha' }, rotulo, dica(txt)) : rotulo;
+};
 const opcoesMacro = () => Object.fromEntries([['', 'Nenhuma'], ...cenario.macros.map((m) => [m.id, m.rotulo])]);
 
 function renderMestre(app) {
@@ -1555,10 +1619,10 @@ function abaGeral() {
     h('div', { class: 'campos' }, campo('Volume (0 a 100)', entradaNum(cenario, 'volume', { max: 100 })), campo('Ambiente contínuo', selecao(cenario, 'ambiente', { servidor: 'Sala de servidores', chuva: 'Chuva na cidade', off: 'Sem ambiente' }), 'Começa desligado. Cada jogador liga no botão AMBIENTE.'),
       h('div', { class: 'campo' }, h('span', {}, 'Teste aqui'), h('button', { onclick: () => { if (cenario.ambiente === 'off') return toast('Escolha um ambiente.'); ligaAudio(); paraAmbiente(); saida.gain.value = volumeSaida(); tocaAmbiente(cenario.ambiente); setTimeout(paraAmbiente, 4000); } }, 'Ouvir ambiente (4s)'))),
     h('div', { class: 'acoes' }, Object.entries(ROTULOS_SOM).map(([k, v]) => h('button', { onclick: () => { ligaAudio(); saida.gain.value = volumeSaida(); sfx(k, k === 'glitch' ? 900 : 3, true); } }, v))),
-    h('h3', {}, 'Sequência de boot'),
+    h('h3', {}, 'Sequência de boot', dica('Sequência de boot')),
     h('div', { class: 'campos' }, h('div', { class: 'campo' }, marca(b, 'ativo', 'Mostrar boot ao abrir'), marca(b, 'barra', 'Barra de progresso')), campo('Frequência', selecao(b, 'frequencia', { sessao: 'Uma vez por sessão do navegador', sempre: 'Sempre ao abrir' })), campo('Segundos em cada linha', entradaNum(b, 'segLinha', { max: 30, step: 0.1 }), 'Pausa antes da próxima linha aparecer.'), campo('Segundos após a última linha', entradaNum(b, 'segFinal', { max: 600, step: 1 }), 'Tempo para ler antes de entrar no terminal.'), h('div', { class: 'campo' }, marca(b, 'pular', 'Jogador pode pular clicando')), campo('Linhas', linhas, 'Cada linha é uma informação. Textos longos quebram sozinhos.', true)),
     h('div', { class: 'acoes', style: 'margin-top:0' }, h('button', { onclick: () => mostraBoot(true) }, 'Testar boot')),
-    h('h3', {}, 'Rolagens'),
+    h('h3', {}, 'Rolagens', dica('Rolagens')),
     h('div', { class: 'campos' }, h('div', { class: 'campo' }, marca(cenario.rolagem, 'criticos', '10 e 1 no d10 rolam mais um dado'), marca(cenario.rolagem, 'empatePassa', 'Empate com o DV passa'))),
     h('h3', {}, 'Senha de configuração'),
     h('div', { class: 'campos' }, campo('Nova senha', nova), h('div', { class: 'campo', style: 'align-content:end' }, h('button', { onclick: troca }, 'Trocar senha')))));
@@ -1568,7 +1632,7 @@ function abaMacros() {
   const ATM = { '': 'Sem mudança', normal: 'Normal', aviso: 'Aviso', critico: 'Crítico' };
   const INT = { '': 'Sem mudança', off: 'Desligado', leve: 'Leve', pesado: 'Pesado' };
   return h('div', { class: 'm-corpo um' }, h('div', { class: 'painel' }, h('h3', {}, 'Macros'), h('p', {}, 'Efeitos prontos para disparar ao vivo ou por falha e sucesso de um nó.'),
-    h('div', { class: 'acoes', style: 'margin-bottom:12px' }, h('button', { class: 'forte', onclick: add }, '+ Macro')),
+    h('div', { class: 'acoes', style: 'margin-bottom:12px' }, h('button', { class: 'forte', onclick: add }, '+ Macro'), dica('Macros')),
     cenario.macros.map((m) => h('fieldset', {}, h('legend', {}, m.rotulo), h('div', { class: 'campos' },
       campo('Nome', entradaTexto(m, 'rotulo', (el) => { el.closest('fieldset').querySelector('legend').textContent = m.rotulo; })), campo('Atmosfera', selecao(m, 'atmos', ATM)), campo('Sinal', selecao(m, 'sinal', INT)), campo('CRT', selecao(m, 'crt', INT)),
       campo('Glitch (ms)', entradaNum(m, 'glitchMs')), campo('Som', selecao(m, 'som', { '': 'Nenhum', ...ROTULOS_SOM })), campo('Aviso na tela', entradaTexto(m, 'aviso'), null, true),
@@ -1590,7 +1654,7 @@ function abaVivo() {
   const c = prog.contagem;
   const esquerda = h('div', { class: 'pilha' },
     h('div', { class: 'painel' }, h('h3', {}, 'Controle à distância'), h('p', { id: 'rele-estado' }, textoRele()), h('small', {}, 'Atmosfera, macros, avisos, contagem e terminal chegam aos jogadores. Os botões dos nós só valem neste navegador.')),
-    h('div', { class: 'painel' }, h('h3', {}, 'Atmosfera'), h('div', { class: 'acoes', style: 'margin:0' }, atos('Normal', () => { prog.atmos = 'normal'; }), atos('Aviso', () => { prog.atmos = 'aviso'; }), atos('Crítico', () => { prog.atmos = 'critico'; }), atos('Glitch', () => { prog.glitchAte = Date.now() + 900; }), atos('Limpar efeitos', () => { prog.atmos = null; prog.sinal = null; prog.crt = null; }))),
+    h('div', { class: 'painel' }, h('h3', {}, 'Atmosfera', dica('Atmosfera')), h('div', { class: 'acoes', style: 'margin:0' }, atos('Normal', () => { prog.atmos = 'normal'; }), atos('Aviso', () => { prog.atmos = 'aviso'; }), atos('Crítico', () => { prog.atmos = 'critico'; }), atos('Glitch', () => { prog.glitchAte = Date.now() + 900; }), atos('Limpar efeitos', () => { prog.atmos = null; prog.sinal = null; prog.crt = null; }))),
     h('div', { class: 'painel' }, h('h3', {}, 'Macros'), cenario.macros.length ? h('div', { class: 'acoes', style: 'margin:0' }, cenario.macros.map((m) => atos(m.rotulo, () => aplicaMacro(m)))) : h('p', {}, 'Nenhuma macro criada.')),
     h('div', { class: 'painel' }, h('h3', {}, 'Contagem regressiva'),
       c ? h('p', { class: 'relogio', id: 'relogio' }, formata(restoContagem())) : null,
@@ -1760,6 +1824,9 @@ async function inicia() {
   });
   mudo = ler('nt.mudo') === '1';
   ambienteLigado = ler('nt.ambiente') === '1';
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.dica')) fechaDica(); }, { capture: true });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && balao) { fechaDica(); e.stopPropagation(); } }, { capture: true });
+  document.addEventListener('scroll', posicionaDica, { capture: true });
   document.addEventListener('pointerdown', liberaAudio, { capture: true });
   document.addEventListener('keydown', liberaAudio, { capture: true });
   document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('button'); if (b && !b.disabled && !b.closest('.bloco,.g-breach,.g-circ,.g-mem,.teclado,.alfabeto,.cifra,.boot')) sfx('click'); }, true);

@@ -219,14 +219,14 @@ test.describe('construir o caminho', () => {
     }
     await campo(page, 'Se esgotar os erros').selectOption('travarTempo');
     await expect(campo(page, 'Tempo de trava (segundos)')).toBeVisible();
-    await page.getByLabel('Permitir forçar acesso').check();
+    await page.getByLabel('Permitir forçar acesso', { exact: true }).check();
     await expect(campo(page, 'DV para forçar')).toBeVisible();
-    await page.getByLabel('Teste de perícia antes do jogo').check();
+    await page.getByLabel('Teste de perícia antes do jogo', { exact: true }).check();
     await expect(campo(page, 'DV do teste')).toBeVisible();
   });
   test('texto criptografado mostra os campos e salva', async ({ page }) => {
     await mestre(page, [{ id: 'a', nome: 'A', texto: 'oi' }]);
-    await page.getByLabel('Mostrar embaralhado até decriptar').check();
+    await page.getByLabel('Mostrar embaralhado até decriptar', { exact: true }).check();
     await campo(page, 'Camadas').fill('2');
     await campo(page, 'Dificuldade do teste (DV)').fill('9');
     await assentar(page);
@@ -459,8 +459,8 @@ test.describe('aba geral', () => {
   test('regras de rolagem são salvas', async ({ page }) => {
     await mestre(page);
     await aba(page, 'Geral');
-    await page.getByLabel('Empate com o DV passa').check();
-    await page.getByLabel('10 e 1 no d10 rolam mais um dado').uncheck();
+    await page.getByLabel('Empate com o DV passa', { exact: true }).check();
+    await page.getByLabel('10 e 1 no d10 rolam mais um dado', { exact: true }).uncheck();
     await assentar(page);
     expect((await nosSalvos(page)).rolagem).toEqual({ criticos: false, empatePassa: true });
   });
