@@ -92,7 +92,7 @@ html[data-urgente="1"] .relogio{color:var(--perigo);animation:pisca .6s infinite
 .g-circ svg{display:block;width:100%;height:100%}
 .g-circ .fixo{cursor:default}
 .cifra{display:flex;flex-wrap:wrap;gap:12px 16px;margin-bottom:14px}
-.cifra .pal{display:flex;gap:3px}
+.cifra .pal{display:flex;flex-wrap:wrap;gap:3px}
 .cifra button{width:30px;padding:2px 0;line-height:1.2}
 .cifra button b{display:block;min-height:1.3em;color:var(--ok)}
 .cifra button.sel{border-color:var(--p);box-shadow:0 0 0 1px var(--p) inset}
@@ -459,7 +459,7 @@ let cenario, prog, embutido = null, NS = 'nt.base';
 let mestre = false, aba = 'construir', selId = null, modal = null, confirmacao = null;
 const RELE = window.RELE_URL || 'https://ntfy.sh', CAMPOS_RELE = ['atmos', 'sinal', 'crt', 'glitchAte', 'glitchMs', 'contagem', 'terminal', 'som', 'aviso'];
 let releFonte = null, releBase = null, releTimer = null, releFalhou = false, releTexto = '';
-const releChaves = new Set();
+const releChaves = new Set(), releNos = [];
 let canal = null, audio = null, saida = null, ambiente = null, cenarioBruto = null, ultimoSom = 0, ultimoAviso = 0;
 let conjuntoRecolhido = null;
 const vivoForm = { seg: 120, final: 'desligar', msg: '' };
@@ -682,7 +682,8 @@ function agendaRele() {
   const g = estadoGlobal();
   CAMPOS_RELE.forEach((k) => { if (JSON.stringify(g[k]) !== JSON.stringify(releBase[k])) releChaves.add(k); });
   releBase = g;
-  if (!cenario.sala || !releChaves.size) return;
+  if (!cenario.sala) { releChaves.clear(); releNos.length = 0; return; }
+  if (!releChaves.size && !releNos.length) return;
   clearTimeout(releTimer);
   releTimer = setTimeout(enviaRele, 120);
 }
@@ -693,16 +694,17 @@ function mostraRele(txt) {
   if (el) el.textContent = textoRele();
 }
 async function enviaRele() {
-  const k = [...releChaves], g = estadoGlobal();
+  const k = [...releChaves], n = releNos.splice(0), g = estadoGlobal();
   releChaves.clear();
   g.aviso.txt = String(g.aviso.txt).slice(0, 2000);
   try {
-    const r = await fetch(RELE + '/' + cenario.sala, { method: 'POST', body: JSON.stringify({ t: Date.now(), k, g }) });
+    const r = await fetch(RELE + '/' + cenario.sala, { method: 'POST', body: JSON.stringify({ t: Date.now(), k, g, n }) });
     if (!r.ok) throw new Error('rele ' + r.status);
     releFalhou = false;
     mostraRele('Último envio às ' + new Date().toLocaleTimeString('pt-BR') + '.');
   } catch {
     k.forEach((c) => releChaves.add(c));
+    releNos.unshift(...n);
     if (!releFalhou) toast('Os jogadores não receberam o último comando. Tentando de novo.');
     releFalhou = true;
     mostraRele('Falha ao enviar. Tentando de novo.');
@@ -712,6 +714,7 @@ async function enviaRele() {
 }
 function aplicaRele(msg, silencioso) {
   if (mestre || !msg || !msg.g || !(msg.t > prog.releT)) return;
+  const jaConectado = prog.releT > 0;
   prog.releT = msg.t;
   for (const k of (silencioso ? Object.keys(msg.g) : msg.k)) {
     if (!CAMPOS_RELE.includes(k) || !(k in msg.g)) continue;
@@ -722,7 +725,21 @@ function aplicaRele(msg, silencioso) {
     } else if (k === 'contagem' && silencioso && msg.g.contagem && msg.g.contagem.resto === null && msg.g.contagem.ate <= Date.now()) prog.contagem = null;
     else prog[k] = msg.g[k];
   }
+  if (!silencioso || jaConectado) (msg.n || []).forEach((a) => {
+    if (a.acao === 'tudo') { prog.nos = {}; prog.aberto = []; return; }
+    const n = noPorId(a.id);
+    if (n && ACOES_NO[a.acao]) ACOES_NO[a.acao](n, pn(n.id), a.val);
+  });
   efeitosRemotos(); commit(); render(); atualizaModal();
+}
+function testaRele() {
+  const t = Date.now(), fonte = new EventSource(RELE + '/' + cenario.sala + '/sse');
+  const fim = (ok) => { clearTimeout(limite); fonte.close(); mostraRele(ok ? 'Conexão OK: a mensagem foi e voltou pelo serviço.' : 'Sem resposta do serviço. Os comandos podem não chegar.'); };
+  const limite = setTimeout(() => fim(false), 8000);
+  mostraRele('Testando a conexão...');
+  fonte.onopen = () => { fetch(RELE + '/' + cenario.sala, { method: 'POST', body: JSON.stringify({ t, k: [], g: estadoGlobal(), n: [] }) }).catch(() => fim(false)); };
+  fonte.onmessage = (e) => { try { const d = JSON.parse(e.data); if (d.event === 'message' && JSON.parse(d.message).t === t) fim(true); } catch { /* mensagem inválida */ } };
+  fonte.onerror = () => { if (fonte.readyState === 2) fim(false); };
 }
 async function buscaUltimoRele() {
   try {
@@ -934,6 +951,16 @@ function reseta(n, novoPuzzle) {
   s.rev++;
   commit();
 }
+
+const ACOES_NO = {
+  liberar: (n, s) => { s.status = 'ativo'; resolver(n); },
+  resetar: (n) => reseta(n, false),
+  novo: (n) => reseta(n, true),
+  travar: (n, s) => { s.status = 'travado'; s.travadoAte = null; },
+  quebrar: (n, s) => { s.status = 'quebrado'; },
+  decriptar: (n, s) => { s.rodada = Number(n.cripto.rodadas); },
+  visivel: (n, s, v) => { s.visivel = v; }
+};
 
 function clicarNo(n, nivel) {
   if (n.estrutura === 'titulo') return;
@@ -1655,7 +1682,7 @@ function abaVivo() {
   const envia = (t) => { prog.aviso = { seq: prog.aviso.seq + 1, txt: t }; ultimoAviso = prog.aviso.seq; commit(); };
   const c = prog.contagem;
   const esquerda = h('div', { class: 'pilha' },
-    h('div', { class: 'painel' }, h('h3', {}, 'Controle à distância'), h('p', { id: 'rele-estado' }, textoRele()), h('small', {}, 'Atmosfera, macros, avisos, contagem e terminal chegam aos jogadores. Os botões dos nós só valem neste navegador.')),
+    h('div', { class: 'painel' }, h('h3', {}, 'Controle à distância'), h('p', { id: 'rele-estado' }, textoRele()), h('small', {}, 'Tudo neste painel chega aos jogadores, inclusive os botões dos nós. O progresso deles não aparece aqui.'), cenario.sala ? h('div', { class: 'acoes' }, h('button', { onclick: testaRele }, 'Testar conexão')) : null),
     h('div', { class: 'painel' }, h('h3', {}, 'Atmosfera', dica('Atmosfera')), h('div', { class: 'acoes', style: 'margin:0' }, atos('Normal', () => { prog.atmos = 'normal'; }), atos('Aviso', () => { prog.atmos = 'aviso'; }), atos('Crítico', () => { prog.atmos = 'critico'; }), atos('Glitch', () => { prog.glitchAte = Date.now() + 900; }), atos('Limpar efeitos', () => { prog.atmos = null; prog.sinal = null; prog.crt = null; }))),
     h('div', { class: 'painel' }, h('h3', {}, 'Macros'), cenario.macros.length ? h('div', { class: 'acoes', style: 'margin:0' }, cenario.macros.map((m) => atos(m.rotulo, () => aplicaMacro(m)))) : h('p', {}, 'Nenhuma macro criada.')),
     h('div', { class: 'painel' }, h('h3', {}, 'Contagem regressiva'),
@@ -1668,25 +1695,26 @@ function abaVivo() {
     cenario.nos.filter((n) => n.estrutura !== 'titulo').map((n) => {
       const s = pn(n.id);
       const p = protegido(n);
+      const noAto = (rot, acao, cl, val) => atos(rot, () => { releNos.push({ id: n.id, acao, val }); ACOES_NO[acao](n, s, val); }, cl);
       return h('div', { class: 'vivo-no' },
         h('div', { class: 'cab' }, h('b', {}, n.nome), h('span', { class: 'pill ' + s.status }, NOMES_STATUS[s.status]), p ? h('small', {}, 'Erros: ' + s.tentativas + (Number(n.protecao.maxTentativas) > 0 ? '/' + n.protecao.maxTentativas : '')) : null, visivel(n) ? null : h('small', { class: 'alerta' }, 'oculto')),
         respostaDe(n) ? h('div', { class: 'resp' }, respostaDe(n)) : null,
         h('div', { class: 'btns' },
-          p ? atos('Liberar', () => { s.status = 'ativo'; resolver(n); }) : null,
-          p || n.cripto.ativo || s.status !== 'ativo' ? h('button', { onclick: () => { reseta(n, false); render(); } }, 'Resetar') : null,
-          n.protecao.tipo === 'hack' ? h('button', { onclick: () => { reseta(n, true); render(); } }, 'Novo puzzle') : null,
-          atos('Travar', () => { s.status = 'travado'; s.travadoAte = null; }),
-          atos('Quebrar', () => { s.status = 'quebrado'; }, 'risco'),
-          n.cripto.ativo ? atos('Decriptar', () => { s.rodada = Number(n.cripto.rodadas); }) : null,
-          atos(visivel(n) ? 'Ocultar' : 'Revelar', () => { s.visivel = !visivel(n); }),
+          p ? noAto('Liberar', 'liberar') : null,
+          p || n.cripto.ativo || s.status !== 'ativo' ? noAto('Resetar', 'resetar') : null,
+          n.protecao.tipo === 'hack' ? noAto('Novo puzzle', 'novo') : null,
+          noAto('Travar', 'travar'),
+          noAto('Quebrar', 'quebrar', 'risco'),
+          n.cripto.ativo ? noAto('Decriptar', 'decriptar') : null,
+          noAto(visivel(n) ? 'Ocultar' : 'Revelar', 'visivel', null, !visivel(n)),
           p && respostaDe(n) ? h('button', { onclick: () => envia('DICA: ' + respostaDe(n)) }, 'Enviar resposta')  : null));
     }));
   return h('div', { class: 'm-corpo' }, esquerda, lista);
 }
 const baixa = (nome, conteudo, tipo) => {
   const u = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
-  const a = h('a', { href: u, download: nome }); document.body.append(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(u), 60000);
+  const a = h('a', { href: u, download: nome }); document.body.append(a); a.click();
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(u); }, 60000);
 };
 const slug = () => (Puzzles.normalizaTexto(cenario.titulo).toLowerCase().trim().replace(/\s+/g, '-') || 'terminal').slice(0, 40);
 function exportaJogadores() {
@@ -1722,6 +1750,7 @@ function abaPublicar() {
   } });
   return h('div', { class: 'm-corpo um' }, h('div', { class: 'painel pilha' },
     h('h3', {}, 'Liberar para os jogadores'),
+    cenario.senhaHash === HASH_INICIAL ? h('p', { class: 'alerta' }, 'Você ainda usa a senha padrão. Troque em Geral antes de enviar o link.') : null,
     comProblema.length ? h('div', { class: 'alerta-no', role: 'status' }, comProblema.length + ' nó(s) precisam de atenção: ' + comProblema.map((n) => n.nome).join(', ')) : null,
     h('p', {}, 'O link leva o cenário inteiro. Quem abrir entra no modo jogador, e o mestre pode abrir o mesmo link em outro aparelho, digitar a senha e continuar editando. Troque a senha inicial antes de gerar o link.'),
     h('div', { class: 'acoes', style: 'margin:0' }, h('button', { class: 'forte', onclick: () => mostraLink(saidaLink) }, 'Copiar link para jogadores'), h('button', { onclick: exportaJogadores }, 'Exportar arquivo HTML')),
@@ -1731,7 +1760,7 @@ function abaPublicar() {
     campo('Importar cenário', arquivo),
     h('h3', {}, 'Sessão'),
     h('div', { class: 'acoes', style: 'margin:0' },
-      h('button', { class: 'risco', onclick: () => confirmar('Apagar todo o progresso dos jogadores? O cenário não muda.', () => { const s = prog.som.seq, a = prog.aviso.seq, v = prog.v; prog = novoProgresso(); prog.v = v; prog.som.seq = s; prog.aviso.seq = a; ['atmos', 'sinal', 'crt', 'contagem', 'terminal'].forEach((k) => releChaves.add(k)); commit(); render(); toast('Progresso apagado.'); }) }, 'Resetar progresso'),
+      h('button', { class: 'risco', onclick: () => confirmar('Apagar todo o progresso dos jogadores? O cenário não muda.', () => { const s = prog.som.seq, a = prog.aviso.seq, v = prog.v; prog = novoProgresso(); prog.v = v; prog.som.seq = s; prog.aviso.seq = a; ['atmos', 'sinal', 'crt', 'contagem', 'terminal'].forEach((k) => releChaves.add(k)); releNos.push({ acao: 'tudo' }); commit(); render(); toast('Progresso apagado.'); }) }, 'Resetar progresso'),
       h('button', { class: 'risco', onclick: () => confirmar('Trocar o cenário atual pelo exemplo?', () => { const hash = cenario.senhaHash; cenario = normalizar(cenarioExemplo()); cenario.senhaHash = hash; selId = null; salvaCenario(); render(); }) }, 'Carregar exemplo'))));
 }
 
@@ -1835,6 +1864,10 @@ async function inicia() {
   document.addEventListener('pointerover', (e) => { if (e.pointerType !== 'mouse') return; const b = e.target.closest && e.target.closest('button:not(:disabled)'); if (b && b !== focoSom) sfx('hover'); focoSom = b; });
   render(); mostraBoot();
   conectaRele();
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !releFonte) return;
+    if (releFonte.readyState === 2) { releFonte = null; conectaRele(); } else buscaUltimoRele();
+  });
   setInterval(tique, 250);
 }
 inicia();

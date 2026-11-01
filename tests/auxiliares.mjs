@@ -18,6 +18,14 @@ export const test = base.extend({
 });
 export { expect };
 
+export async function baixar(page, clicar, arquivo) {
+  for (let i = 0; ; i++) {
+    const espera = page.waitForEvent('download');
+    await clicar();
+    const d = await espera;
+    if (await d.failure() !== 'canceled' || i === 2) { await d.saveAs(arquivo); return; }
+  }
+}
 export const botao = (page, nome) => page.getByRole('button', { name: nome, exact: true });
 export const campo = (page, nome) => page.getByLabel(nome, { exact: true });
 

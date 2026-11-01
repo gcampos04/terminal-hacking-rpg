@@ -26,7 +26,7 @@ O site não tem servidor, então os comandos do mestre chegam aos jogadores pelo
 
 Só quem abre um link de jogador ou o arquivo exportado escuta a sala. O site sem link é a área de trabalho do mestre e não recebe esses comandos.
 
-Chegam aos jogadores atmosfera, macros, avisos, contagem e estado do terminal. Os botões dos nós, como Liberar e Resetar, só valem no navegador do mestre.
+Todos os comandos do painel **Ao vivo** chegam aos jogadores, inclusive Liberar e Resetar. O mestre não vê o progresso deles. O botão **Testar conexão** confirma se a mensagem vai e volta pelo serviço.
 
 As mensagens levam apenas esse estado, nunca as respostas. Mesmo assim, quem souber o nome da sala pode ler e enviar comandos.
 

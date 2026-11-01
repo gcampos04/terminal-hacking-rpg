@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { test, expect, botao, campo, semear, mestre, entrar, aba, estado, nosSalvos, assentar, noVivo, noDaArvore, blocos, SENHA, temporario, iniciarHack, vencerPalavras } from './auxiliares.mjs';
+import { test, expect, botao, campo, semear, mestre, entrar, aba, estado, nosSalvos, assentar, noVivo, noDaArvore, blocos, SENHA, temporario, baixar, iniciarHack, vencerPalavras } from './auxiliares.mjs';
 
 const CENARIO = [
   { id: 'a', nome: 'Senha', texto: 'Dentro', protecao: { tipo: 'senha', codigo: 'x' } },
@@ -239,10 +239,8 @@ test.describe('publicar', () => {
   test('exporta e importa o cenário em JSON', async ({ page }, info) => {
     await mestre(page, CENARIO);
     await aba(page, 'Publicar');
-    const baixa = page.waitForEvent('download');
-    await botao(page, 'Exportar cenário (.json)').click();
     const arquivo = temporario(info, 'c.json');
-    await (await baixa).saveAs(arquivo);
+    await baixar(page, () => botao(page, 'Exportar cenário (.json)').click(), arquivo);
     const dados = JSON.parse(await fs.readFile(arquivo, 'utf8'));
     expect(dados.nos).toHaveLength(5);
     dados.titulo = 'IMPORTADO';
@@ -345,10 +343,8 @@ test.describe('publicar', () => {
   test('arquivo HTML exportado abre sozinho como jogador', async ({ page }, info) => {
     await mestre(page, CENARIO);
     await aba(page, 'Publicar');
-    const baixa = page.waitForEvent('download');
-    await botao(page, 'Exportar arquivo HTML').click();
     const arquivo = temporario(info, 'j.html');
-    await (await baixa).saveAs(arquivo);
+    await baixar(page, () => botao(page, 'Exportar arquivo HTML').click(), arquivo);
     const outro = await (await page.context().browser().newContext()).newPage();
     await outro.goto('file:///' + arquivo.replace(/\\/g, '/'));
     await outro.locator('.boot button').click({ timeout: 1500 }).catch(() => {});
