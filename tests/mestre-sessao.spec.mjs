@@ -129,6 +129,56 @@ test.describe('painel ao vivo', () => {
     await page.waitForTimeout(200);
     await expect(page.locator('.g-breach button.usado')).toHaveCount(1);
   });
+  test('as duas colunas do painel ao vivo rolam de forma independente', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 500 });
+    await mestre(page, Array.from({ length: 16 }, (_, i) => ({ id: 'n' + i, nome: 'Nó ' + i, texto: 'x', protecao: { tipo: 'senha', codigo: 'a' } })));
+    await aba(page, 'Ao vivo');
+    const esquerda = page.locator('.m-corpo > .pilha'), direita = page.locator('.m-corpo > .painel');
+    const topo = (l) => l.evaluate((e) => e.scrollTop);
+    await esquerda.hover();
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => topo(esquerda)).toBeGreaterThan(0);
+    expect(await topo(direita)).toBe(0);
+    await direita.hover();
+    await page.mouse.wheel(0, 600);
+    await expect.poll(() => topo(direita)).toBeGreaterThan(0);
+    await esquerda.evaluate((e) => { e.scrollTop = e.scrollHeight; });
+    await expect(botao(page, 'Explodir')).toBeInViewport();
+    await botao(page, 'Explodir').click();
+    await expect(page.getByRole('heading', { name: 'Terminal: explodido' })).toBeVisible();
+    await botao(page, 'Religar').click();
+  });
+  test('painéis internos não encolhem nem criam rolagem própria', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 400 });
+    await mestre(page, CENARIO);
+    await aba(page, 'Ao vivo');
+    const cortados = await page.locator('.pilha > .painel').evaluateAll((l) => l.filter((p) => p.scrollHeight > p.clientHeight + 1).length);
+    expect(cortados).toBe(0);
+  });
+  test('todas as abas do mestre alcançam o fim do conteúdo', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 420 });
+    const nos = Array.from({ length: 24 }, (_, i) => ({ id: 'n' + i, nome: 'Nó ' + i, texto: 'x' }));
+    await mestre(page, nos);
+    const arvore = page.locator('.m-corpo > .painel').first();
+    await arvore.hover();
+    await page.mouse.wheel(0, 2000);
+    await expect(page.locator('[data-no=n23]')).toBeInViewport();
+    await page.locator('.m-corpo > .painel').nth(1).hover();
+    await page.mouse.wheel(0, 2000);
+    await expect(campo(page, 'Tipo')).toBeInViewport();
+    await aba(page, 'Geral');
+    await page.locator('.m-corpo .painel').first().hover();
+    await page.mouse.wheel(0, 5000);
+    await expect(botao(page, 'Trocar senha')).toBeInViewport();
+    await aba(page, 'Macros');
+    await page.locator('.m-corpo .painel').first().hover();
+    await page.mouse.wheel(0, 5000);
+    await expect(page.getByRole('button', { name: 'Excluir' }).last()).toBeInViewport();
+    await aba(page, 'Publicar');
+    await page.locator('.m-corpo .painel').first().hover();
+    await page.mouse.wheel(0, 5000);
+    await expect(botao(page, 'Carregar exemplo')).toBeInViewport();
+  });
   test('contagem: iniciar, pausar, continuar, parar', async ({ page, context }) => {
     const j = await duasJanelas(page, context);
     await page.getByRole('spinbutton', { name: 'Segundos' }).fill('120');

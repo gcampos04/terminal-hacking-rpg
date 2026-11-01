@@ -20,6 +20,14 @@ O cenário vai comprimido depois do `#` da URL, então a hospedagem não recebe 
 
 Quem tiver o link consegue extrair as respostas e o hash da senha com alguma técnica. A senha evita acesso casual à configuração, mas não é proteção real.
 
+## Controle à distância
+
+O site não tem servidor, então os comandos do mestre chegam aos jogadores pelo [ntfy.sh](https://ntfy.sh), um serviço público de mensagens. Ao gerar o link, o cenário ganha uma sala com nome aleatório, e todo link gerado depois usa a mesma sala.
+
+Chegam aos jogadores atmosfera, macros, avisos, contagem e estado do terminal. Os botões dos nós, como Liberar e Resetar, só valem no navegador do mestre.
+
+As mensagens levam apenas esse estado, nunca as respostas. Mesmo assim, quem souber o nome da sala pode ler e enviar comandos.
+
 ## Testes
 
 Os testes de ponta a ponta usam Playwright e rodam contra uma cópia local da página.

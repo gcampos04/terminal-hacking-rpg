@@ -339,6 +339,100 @@ test.describe('aba geral', () => {
     await botao(page, 'CONECTAR').click();
     await expect(page.getByText('> LINHA DOIS')).toBeVisible();
   });
+  test('boot respeita o tempo escolhido e mostra a contagem', async ({ page }) => {
+    await semear(page, await page.goto('/').then(() => page.evaluate(() => cenario.nos)), { boot: { ativo: true, linhas: ['AVISO DA MISSÃO'], barra: true, frequencia: 'sempre', segLinha: 0.1, segFinal: 4, pular: true } });
+    await botao(page, 'CONECTAR').click();
+    await expect(page.getByText('> AVISO DA MISSÃO')).toBeVisible();
+    await expect(page.getByText(/^Continuando em \ds$/)).toBeVisible();
+    await expect.poll(() => page.locator('.boot .barra i').evaluate((e) => Math.round(e.getBoundingClientRect().width / e.parentElement.getBoundingClientRect().width * 100))).toBe(100);
+    await page.waitForTimeout(2000);
+    await expect(page.locator('.boot')).toBeVisible();
+    await expect(page.locator('.boot')).toHaveCount(0, { timeout: 4000 });
+  });
+  test('tempo entre linhas segura a próxima linha', async ({ page }) => {
+    await semear(page, [{ id: 'a', nome: 'A' }], { boot: { ativo: true, linhas: ['UM', 'DOIS'], barra: true, frequencia: 'sempre', segLinha: 1.5, segFinal: 0, pular: true } });
+    await botao(page, 'CONECTAR').click();
+    await expect(page.getByText('> UM')).toBeVisible();
+    await page.waitForTimeout(700);
+    await expect(page.getByText('> DOIS')).toHaveCount(0);
+    await expect(page.getByText('> DOIS')).toBeVisible({ timeout: 2000 });
+  });
+  test('última linha fica visível mesmo com tempo final zerado', async ({ page }) => {
+    await semear(page, [{ id: 'a', nome: 'A' }], { boot: { ativo: true, linhas: ['ÚNICA'], barra: true, frequencia: 'sempre', segLinha: 1, segFinal: 0, pular: true } });
+    await botao(page, 'CONECTAR').click();
+    await expect(page.getByText('> ÚNICA')).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(page.getByText('> ÚNICA')).toBeVisible();
+    await expect(page.locator('.boot')).toHaveCount(0, { timeout: 2000 });
+  });
+  test('sem permissão, clicar não pula o boot', async ({ page }) => {
+    await semear(page, [{ id: 'a', nome: 'A' }], { boot: { ativo: true, linhas: ['LEIA'], barra: true, frequencia: 'sempre', segLinha: 0.1, segFinal: 3, pular: false } });
+    await botao(page, 'CONECTAR').click();
+    await expect(page.getByText('> LEIA')).toBeVisible();
+    await page.locator('.boot').click();
+    await page.waitForTimeout(300);
+    await expect(page.locator('.boot')).toBeVisible();
+  });
+  test('com permissão, clicar pula o boot', async ({ page }) => {
+    await semear(page, [{ id: 'a', nome: 'A' }], { boot: { ativo: true, linhas: ['LEIA'], barra: true, frequencia: 'sempre', segLinha: 0.1, segFinal: 30, pular: true } });
+    await botao(page, 'CONECTAR').click();
+    await expect(page.getByText('> LEIA')).toBeVisible();
+    await page.locator('.boot').click();
+    await expect(page.locator('.boot')).toHaveCount(0);
+  });
+  test('sem sons o boot começa sozinho e segue o tempo', async ({ page }) => {
+    await semear(page, [{ id: 'a', nome: 'A' }], { sons: false, boot: { ativo: true, linhas: ['LEIA'], barra: true, frequencia: 'sempre', segLinha: 0.1, segFinal: 3, pular: false } });
+    await expect(page.getByText('> LEIA')).toBeVisible();
+    await expect(botao(page, 'CONECTAR')).toHaveCount(0);
+    await page.waitForTimeout(1000);
+    await expect(page.locator('.boot')).toBeVisible();
+  });
+  test('texto longo do boot quebra linha e pode rolar', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 400 });
+    const longa = 'Informação muito longa da missão. '.repeat(30);
+    await semear(page, [{ id: 'a', nome: 'A' }], { boot: { ativo: true, linhas: [longa], barra: true, frequencia: 'sempre', segLinha: 0.1, segFinal: 5, pular: true } });
+    await botao(page, 'CONECTAR').click();
+    await expect(page.locator('.linha-boot')).toBeVisible();
+    const m = await page.locator('.boot').evaluate((e) => ({ largura: e.scrollWidth <= e.clientWidth, rola: e.scrollHeight > e.clientHeight, modo: getComputedStyle(e).overflowY }));
+    expect(m).toEqual({ largura: true, rola: true, modo: 'auto' });
+  });
+  test('campos de tempo salvam, respeitam limites e vão no link', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await mestre(page);
+    await aba(page, 'Geral');
+    await campo(page, 'Segundos em cada linha').fill('2.5');
+    await campo(page, 'Segundos após a última linha').fill('9000');
+    await page.getByLabel('Jogador pode pular clicando').uncheck();
+    const b = (await nosSalvos(page)).boot;
+    expect([b.segLinha, b.segFinal, b.pular]).toEqual([2.5, 600, false]);
+    await aba(page, 'Publicar');
+    await botao(page, 'Copiar link para jogadores').click();
+    const link = await campo(page, 'Link para jogadores').inputValue();
+    const outro = await (await context.browser().newContext()).newPage();
+    await outro.goto(link);
+    expect(await outro.evaluate(() => [cenario.boot.segLinha, cenario.boot.segFinal, cenario.boot.pular])).toEqual([2.5, 600, false]);
+    await outro.context().close();
+  });
+  test('testar boot mostra a prévia sem sair da configuração', async ({ page }) => {
+    await mestre(page);
+    await aba(page, 'Geral');
+    await campo(page, 'Linhas').fill('PREVIA DO MESTRE');
+    await campo(page, 'Segundos após a última linha').fill('60');
+    await page.getByLabel('Jogador pode pular clicando').uncheck();
+    await botao(page, 'Testar boot').click();
+    await expect(page.getByText('> PREVIA DO MESTRE')).toBeVisible();
+    await page.locator('.boot').click();
+    await expect(page.locator('.boot')).toHaveCount(0);
+    await expect(page.getByRole('tablist')).toBeVisible();
+    await campo(page, 'Linhas').fill('');
+    await botao(page, 'Testar boot').click();
+    await expect(page.getByText('Escreva ao menos uma linha.')).toBeVisible();
+  });
+  test('cenário antigo sem tempos usa os padrões', async ({ page }) => {
+    await page.goto('/');
+    expect(await page.evaluate(() => { const c = normalizar({ nos: [], boot: { ativo: true, linhas: ['A'] } }).boot; return [c.segLinha, c.segFinal, c.pular]; })).toEqual([0.4, 0.5, true]);
+    await page.locator('.boot button').click();
+  });
   test('sons desligados escondem os botões de som e não pedem CONECTAR', async ({ page }) => {
     await mestre(page);
     await aba(page, 'Geral');
