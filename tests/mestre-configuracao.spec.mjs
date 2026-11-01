@@ -128,6 +128,69 @@ test.describe('construir o caminho', () => {
     await noDaArvore(page, 'A').click();
     await expect(campo(page, 'Estrutura').locator('option[value=titulo]')).toBeDisabled();
   });
+  test('árvore liga pais e filhos com conectores', async ({ page }) => {
+    await mestre(page, [{ id: 'a', nome: 'A' }, { id: 'f', pai: 'a', nome: 'Filho' }, { id: 'g', pai: 'a', nome: 'Gama' }, { id: 'b', nome: 'B' }]);
+    await expect(page.getByRole('tree')).toBeVisible();
+    await expect(page.locator('[data-no=a] .guia.t')).toHaveCount(1);
+    await expect(page.locator('[data-no=a] .icone.desce')).toHaveCount(1);
+    await expect(page.locator('[data-no=f] .guia.v')).toHaveCount(1);
+    await expect(page.locator('[data-no=f] .guia.t')).toHaveCount(1);
+    await expect(page.locator('[data-no=g] .guia.l')).toHaveCount(1);
+    await expect(page.locator('[data-no=b] .guia.l')).toHaveCount(1);
+    await expect(page.locator('[data-no=b] .guia.v')).toHaveCount(0);
+  });
+  test('recolher ramo esconde descendentes, conta e lembra após recarregar', async ({ page }) => {
+    await mestre(page, [{ id: 'a', nome: 'A' }, { id: 'f', pai: 'a', nome: 'Filho' }, { id: 'n', pai: 'f', nome: 'Neto' }]);
+    await botao(page, 'Recolher A').click();
+    await expect(noDaArvore(page, 'Filho')).toHaveCount(0);
+    await expect(page.locator('[data-no=a] .qtd')).toHaveText('(2)');
+    await page.reload();
+    await expect(noDaArvore(page, 'Filho')).toHaveCount(0);
+    await botao(page, 'Expandir A').click();
+    await expect(noDaArvore(page, 'Neto')).toBeVisible();
+    await botao(page, 'Recolher tudo').click();
+    await expect(page.locator('.no-arv')).toHaveCount(1);
+    await botao(page, 'Expandir tudo').click();
+    await expect(page.locator('.no-arv')).toHaveCount(3);
+  });
+  test('recolher o ramo do nó selecionado seleciona o pai', async ({ page }) => {
+    await mestre(page, [{ id: 'a', nome: 'A' }, { id: 'f', pai: 'a', nome: 'Filho' }]);
+    await noDaArvore(page, 'Filho').click();
+    await botao(page, 'Recolher A').click();
+    await expect(campo(page, 'Nome')).toHaveValue('A');
+  });
+  test('criar filho em ramo recolhido abre o ramo', async ({ page }) => {
+    await mestre(page, [{ id: 'a', nome: 'A' }, { id: 'f', pai: 'a', nome: 'Filho' }]);
+    await botao(page, 'Recolher A').click();
+    await botao(page, '+ Filho').click();
+    await expect(noDaArvore(page, 'Novo nó')).toBeVisible();
+    await expect(noDaArvore(page, 'Filho')).toBeVisible();
+  });
+  test('teclado navega como no Editor do Registro', async ({ page }) => {
+    await mestre(page, [{ id: 'a', nome: 'A' }, { id: 'f', pai: 'a', nome: 'Filho' }, { id: 'b', nome: 'B' }]);
+    await noDaArvore(page, 'A').click();
+    await page.keyboard.press('ArrowDown');
+    await expect(campo(page, 'Nome')).toHaveValue('Filho');
+    await page.keyboard.press('ArrowLeft');
+    await expect(campo(page, 'Nome')).toHaveValue('A');
+    await page.keyboard.press('ArrowLeft');
+    await expect(noDaArvore(page, 'Filho')).toHaveCount(0);
+    await page.keyboard.press('ArrowRight');
+    await expect(noDaArvore(page, 'Filho')).toBeVisible();
+    await page.keyboard.press('End');
+    await expect(campo(page, 'Nome')).toHaveValue('B');
+  });
+  test('etiquetas distinguem os minigames e a porta', async ({ page }) => {
+    const hk = (id, puzzle) => ({ id, nome: id, tipo: 'nenhum', protecao: { tipo: 'hack', puzzle } });
+    await mestre(page, [hk('p1', 'palavras'), hk('m1', 'memoria'), { id: 'd', nome: 'Porta', tipo: 'porta', protecao: { tipo: 'hack', puzzle: 'memoria' } }, { id: 'c', nome: 'Texto', texto: 'x', cripto: { ativo: true } }]);
+    await expect(page.locator('.no-arv .tag')).toHaveText(['Palavras', 'Memória', 'Porta · Memória', 'Cifrado']);
+  });
+  test('alerta do nó aparece e some na árvore', async ({ page }) => {
+    await mestre(page, [{ id: 'a', nome: 'A', protecao: { tipo: 'teclado', codigo: '' } }]);
+    await expect(page.locator('[data-no=a] .aviso-no')).toBeVisible();
+    await campo(page, 'Código (1 a 5 dígitos)').fill('12');
+    await expect(page.locator('[data-no=a] .aviso-no')).toHaveCount(0);
+  });
   test('título não aceita filhos', async ({ page }) => {
     await mestre(page, [{ id: 't', nome: 'Seção', estrutura: 'titulo' }]);
     await expect(botao(page, '+ Filho')).toBeDisabled();

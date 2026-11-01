@@ -116,10 +116,27 @@ html[data-urgente="1"] .relogio{color:var(--perigo);animation:pisca .6s infinite
 .painel h3{font-size:13px;color:var(--p);margin:0 0 10px;text-transform:uppercase}
 .painel+.painel{margin-top:0}
 .pilha{display:grid;gap:12px;align-content:start}
-.no-arv{display:flex;gap:6px;align-items:center;padding:5px 7px;border:1px solid transparent;cursor:pointer;border-radius:3px;width:100%;background:none;text-align:left}
-.no-arv.sel{border-color:var(--p);background:var(--s)}
-.no-arv .nm{flex:1;min-width:0;overflow-wrap:anywhere}
-.no-arv .tag{font-size:11px;color:var(--alerta)}
+.arvore{--guia:color-mix(in srgb,var(--t) 50%,transparent);--meio:15px}
+.arv-acoes{display:flex;gap:6px;margin:0 0 8px}
+.arv-acoes button{padding:2px 8px;font-size:12px}
+.no-arv{display:flex;align-items:flex-start;min-width:fit-content;width:100%;padding-right:6px;cursor:pointer;border-radius:2px}
+.no-arv:hover{background:var(--s)}
+.no-arv:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
+.no-arv.sel{background:var(--s);box-shadow:inset 0 0 0 1px var(--p)}
+.guia,.icone{position:relative;flex:0 0 18px;align-self:stretch}
+.guia.v::before,.guia.t::before,.guia.l::before,.icone.desce::after{content:"";position:absolute;left:8px;top:0;bottom:0;border-left:1px dotted var(--guia)}
+.guia.l::before{bottom:auto;height:var(--meio)}
+.guia.t::after,.guia.l::after{content:"";position:absolute;left:8px;right:0;top:var(--meio);border-top:1px dotted var(--guia)}
+.icone.desce::after{top:var(--meio)}
+.icone i{position:absolute;left:4px;top:calc(var(--meio) - 5px);width:10px;height:10px;background:var(--t);z-index:1}
+.no-arv.prot .icone i{background:var(--alerta)}
+.no-arv.secao .icone i{background:none;border:1px solid var(--guia)}
+.no-arv.secao .nm{text-transform:uppercase;letter-spacing:.1em;font-size:12.5px;opacity:.8}
+.ramo{position:absolute;left:1px;top:calc(var(--meio) - 8px);width:15px;height:15px;padding:0;display:grid;place-items:center;background:var(--f);border:1px solid var(--guia);border-radius:0;font-size:12px;line-height:1;z-index:1}
+.no-arv .nm{flex:1 1 auto;min-width:80px;padding:5px 8px 5px 4px;line-height:20px;overflow-wrap:anywhere}
+.no-arv .tag{flex:none;font-size:11px;line-height:20px;padding-top:5px;color:var(--alerta);white-space:nowrap}
+.no-arv .qtd{flex:none;font-size:11px;line-height:20px;padding:5px 6px 0 0;opacity:.7}
+.no-arv .aviso-no{flex:none;line-height:20px;padding:5px 6px 0 0;color:var(--perigo);font-weight:700}
 .campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
 .campo{display:grid;gap:3px;align-content:start}
 .campo label,.campo>span{font-size:12px;opacity:.8}
@@ -141,7 +158,7 @@ legend{color:var(--p);font-size:12px;letter-spacing:.1em;text-transform:uppercas
 .pill.quebrado{color:var(--perigo);border-color:var(--perigo)}
 .alerta-no{border:1px solid var(--alerta);color:var(--alerta);padding:8px 10px;margin-bottom:12px;font-size:13.5px}
 .erro-carga{padding:30px;max-width:640px;margin:auto}
-@media (max-width:760px){.m-corpo{grid-template-columns:1fr;overflow:auto}.tela{padding:8px}body{overflow:auto}.painel{overflow:visible}}
+@media (max-width:760px){.m-corpo{grid-template-columns:1fr;grid-auto-rows:max-content;overflow:auto}.tela{padding:8px}body{overflow:auto}.painel{overflow:visible;min-height:auto}}
 </style>
 </head>
 <body>
@@ -394,11 +411,13 @@ const NOMES_DIF = { facil: 'Fácil', normal: 'Normal', dificil: 'Difícil', expe
 const NOMES_CONSEQ = { travar: 'Travar até o mestre liberar', travarTempo: 'Travar por um tempo', quebrar: 'Quebrar para sempre', novo: 'Gerar outro puzzle (sem travar)' };
 const NOMES_FINAL = { desligar: 'Desligar', corromper: 'Corromper', explodir: 'Explodir', nada: 'Nada (só zera)' };
 const ROTULOS_SOM = { alarme: 'Alarme', sirene: 'Sirene', aviso: 'Aviso', glitch: 'Glitch', estatica: 'Estática', estabiliza: 'Estabilizar', acesso: 'Acesso liberado', erro: 'Erro', trava: 'Trava', portaAbre: 'Porta abrindo', portaFecha: 'Porta fechando', desliga: 'Desligar', vidro: 'Vidro quebrando', explosao: 'Explosão', boot: 'Boot' };
+const TAG_PUZZLE = { breach: 'Breach', palavras: 'Palavras', circuito: 'Circuito', cripto: 'Criptograma', memoria: 'Memória', aleatorio: 'Aleatório' };
 const NOMES_STATUS = { ativo: 'ATIVO', resolvido: 'LIBERADO', travado: 'TRAVADO', quebrado: 'QUEBRADO' };
 
 let cenario, prog, embutido = null, NS = 'nt.base';
 let mestre = false, aba = 'construir', selId = null, modal = null, confirmacao = null;
 let canal = null, audio = null, saida = null, ambiente = null, cenarioBruto = null, ultimoSom = 0, ultimoAviso = 0;
+let conjuntoRecolhido = null;
 const vivoForm = { seg: 120, final: 'desligar', msg: '' };
 let focoSom = null, audioLiberado = false, mudo = false, ambienteLigado = false, ultimoForte = 0, estadoSom = null, marcaContagem = null, marcaPrazo = null;
 
@@ -1255,21 +1274,83 @@ function renderMestre(app) {
   const miolo = { construir: abaConstruir, geral: abaGeral, macros: abaMacros, vivo: abaVivo, publicar: abaPublicar }[aba]();
   app.replaceChildren(h('div', { class: 'tela' }, topo, miolo));
 }
+function tagDoNo(n) {
+  if (n.estrutura === 'titulo') return 'Seção';
+  const p = n.protecao;
+  const protecao = p.tipo === 'hack' ? TAG_PUZZLE[p.puzzle] : p.tipo === 'senha' ? 'Senha' : p.tipo === 'teclado' ? 'Teclado' : '';
+  const conteudo = n.tipo === 'porta' ? 'Porta' : n.tipo === 'texto' && n.cripto.ativo ? 'Cifrado' : '';
+  return [conteudo, protecao].filter(Boolean).join(' · ');
+}
+function recolhidos() {
+  if (!conjuntoRecolhido) {
+    let salvo = [];
+    try { salvo = JSON.parse(ler(NS + '.recolhidos') || '[]'); } catch { /* lista inválida */ }
+    conjuntoRecolhido = new Set(Array.isArray(salvo) ? salvo : []);
+  }
+  return conjuntoRecolhido;
+}
+function gravaRecolhidos() { grava(NS + '.recolhidos', JSON.stringify([...recolhidos()])); }
+function revelaNo(id) {
+  let n = noPorId(id);
+  while (n && n.pai !== null) { recolhidos().delete(n.pai); n = noPorId(n.pai); }
+}
+function selecionaNo(id) {
+  selId = id;
+  render();
+  const el = document.querySelector('[data-no="' + id + '"]');
+  if (el) el.focus();
+}
+function alternaRamo(n) {
+  const r = recolhidos();
+  if (r.has(n.id)) r.delete(n.id);
+  else { r.add(n.id); if (descendentes(n.id).includes(selId)) selId = n.id; }
+  gravaRecolhidos();
+  selecionaNo(selId);
+}
+function teclaArvore(e) {
+  const linhas = [...e.currentTarget.querySelectorAll('[data-no]')].map((l) => l.dataset.no);
+  const i = linhas.indexOf(selId), n = noPorId(selId), temFilhos = n && filhos(n.id).length > 0, fechado = n && recolhidos().has(n.id);
+  if (!n || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  e.preventDefault();
+  if (e.key === 'ArrowUp' && i > 0) selecionaNo(linhas[i - 1]);
+  else if (e.key === 'ArrowDown' && i < linhas.length - 1) selecionaNo(linhas[i + 1]);
+  else if (e.key === 'Home') selecionaNo(linhas[0]);
+  else if (e.key === 'End') selecionaNo(linhas[linhas.length - 1]);
+  else if (e.key === 'ArrowRight' && temFilhos) { if (fechado) alternaRamo(n); else selecionaNo(linhas[i + 1]); } else if (e.key === 'ArrowLeft') { if (temFilhos && !fechado) alternaRamo(n); else if (n.pai !== null) selecionaNo(n.pai); }
+}
+function arvoreDeNos() {
+  const linhas = [];
+  const ramo = (pai, guias, nivel) => {
+    const lista = filhos(pai);
+    lista.forEach((n, i) => {
+      const ultimo = i === lista.length - 1, qtd = filhos(n.id).length, fechado = recolhidos().has(n.id), aberto = qtd > 0 && !fechado;
+      const tag = tagDoNo(n);
+      linhas.push(h('div', { class: 'no-arv' + (selId === n.id ? ' sel' : '') + (protegido(n) ? ' prot' : '') + (n.estrutura === 'titulo' ? ' secao' : ''), role: 'treeitem', 'aria-level': nivel + 1, 'aria-selected': selId === n.id ? 'true' : 'false', 'aria-expanded': qtd ? String(!fechado) : null, tabindex: selId === n.id ? '0' : '-1', 'data-no': n.id, onclick: () => selecionaNo(n.id) },
+        guias.map((g) => h('span', { class: 'guia' + (g ? ' v' : '') })),
+        h('span', { class: 'guia ' + (ultimo ? 'l' : 't') }, qtd ? h('button', { class: 'ramo', tabindex: '-1', 'aria-label': (fechado ? 'Expandir ' : 'Recolher ') + n.nome, onclick: (e) => { e.stopPropagation(); alternaRamo(n); } }, fechado ? '+' : '−') : null),
+        h('span', { class: 'icone' + (aberto ? ' desce' : '') }, h('i', {})),
+        h('span', { class: 'nm', id: 'arv-' + n.id }, n.nome),
+        problemasDoNo(n).length ? h('span', { class: 'aviso-no', title: problemasDoNo(n).join(' ') }, '!') : null,
+        fechado && qtd ? h('span', { class: 'qtd' }, '(' + (descendentes(n.id).length) + ')') : null,
+        tag ? h('span', { class: 'tag' }, tag) : null));
+      if (aberto) ramo(n.id, [...guias, !ultimo], nivel + 1);
+    });
+  };
+  ramo(null, [], 0);
+  return linhas;
+}
 function abaConstruir() {
   if (!noPorId(selId)) selId = cenario.nos[0] ? cenario.nos[0].id : null;
-  const arvore = [];
-  const ramo = (pai, nivel) => filhos(pai).forEach((n) => {
-    const tag = n.estrutura === 'titulo' ? 'título' : n.protecao.tipo === 'hack' ? (NOMES_PUZZLE[n.protecao.puzzle] || 'hack').split(' ')[0] : n.protecao.tipo === 'nenhuma' ? (n.tipo === 'porta' ? 'porta' : '') : n.protecao.tipo;
-    arvore.push(h('button', { class: 'no-arv' + (selId === n.id ? ' sel' : ''), style: 'padding-left:' + (7 + nivel * 16) + 'px', onclick: () => { selId = n.id; render(); } }, h('span', { class: 'nm', id: 'arv-' + n.id }, n.nome), tag ? h('span', { class: 'tag' }, tag) : null));
-    ramo(n.id, nivel + 1);
-  });
-  ramo(null, 0);
+  if (selId) revelaNo(selId);
+  const arvore = arvoreDeNos();
   const sel = noPorId(selId);
-  const adiciona = (pai) => { const n = noPadrao({ pai }); cenario.nos.push(n); selId = n.id; salvaCenario(); render(); };
+  const adiciona = (pai) => { const n = noPadrao({ pai }); cenario.nos.push(n); selId = n.id; salvaCenario(); gravaRecolhidos(); render(); };
+  const comFilhos = cenario.nos.filter((n) => filhos(n.id).length).map((n) => n.id);
   return h('div', { class: 'm-corpo' },
     h('div', { class: 'painel' }, h('h3', {}, 'Caminho do hack'),
       h('div', { class: 'acoes', style: 'margin:0 0 10px' }, h('button', { class: 'forte', onclick: () => adiciona(sel ? sel.pai : null) }, '+ Nó'), h('button', { disabled: !sel || sel.estrutura === 'titulo', onclick: () => adiciona(sel.id) }, '+ Filho')),
-      arvore.length ? arvore : h('p', {}, 'Nenhum nó ainda. Crie o primeiro.')),
+      comFilhos.length ? h('div', { class: 'arv-acoes' }, h('button', { onclick: () => { recolhidos().clear(); gravaRecolhidos(); render(); } }, 'Expandir tudo'), h('button', { onclick: () => { comFilhos.forEach((id) => recolhidos().add(id)); let n = noPorId(selId); while (n && n.pai !== null) n = noPorId(n.pai); selId = n ? n.id : selId; gravaRecolhidos(); render(); } }, 'Recolher tudo')) : null,
+      arvore.length ? h('div', { class: 'arvore', role: 'tree', 'aria-label': 'Caminho do hack', onkeydown: teclaArvore }, arvore) : h('p', {}, 'Nenhum nó ainda. Crie o primeiro.')),
     h('div', { class: 'painel' }, sel ? formNo(sel) : h('p', {}, 'Selecione ou crie um nó.')));
 }
 function problemasDoNo(n) {
@@ -1293,6 +1374,12 @@ function preencheAlertas(el, n) {
 function atualizaAlertas(n) {
   const el = document.querySelector('[data-alertas="' + n.id + '"]');
   if (el) preencheAlertas(el, n);
+  const linha = document.querySelector('[data-no="' + n.id + '"]');
+  if (linha) {
+    const atual = linha.querySelector('.aviso-no'), lista = problemasDoNo(n);
+    if (atual) atual.remove();
+    if (lista.length) linha.querySelector('.nm').after(h('span', { class: 'aviso-no', title: lista.join(' ') }, '!'));
+  }
 }
 function descendentes(id) { return filhos(id).flatMap((n) => [n.id, ...descendentes(n.id)]); }
 function moveNo(n, dir) {

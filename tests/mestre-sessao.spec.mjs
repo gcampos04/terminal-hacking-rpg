@@ -292,6 +292,13 @@ test.describe('publicar', () => {
     await outro.context().close();
     await fs.rm(arquivo);
   });
+  test('painéis do mestre não se sobrepõem em janela estreita', async ({ page }) => {
+    await page.setViewportSize({ width: 700, height: 600 });
+    await mestre(page, Array.from({ length: 24 }, (_, i) => ({ id: 'n' + i, nome: 'Nó ' + i })));
+    const [a, b] = await page.locator('.m-corpo > .painel').evaluateAll((l) => l.map((p) => { const r = p.getBoundingClientRect(); return { fim: r.bottom, topo: r.top, alto: r.height, cheio: p.scrollHeight }; }));
+    expect(a.alto).toBeGreaterThanOrEqual(a.cheio - 1);
+    expect(b.topo).toBeGreaterThanOrEqual(a.fim);
+  });
   test('layout do mestre não estoura no celular', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 760 });
     await mestre(page, CENARIO);
