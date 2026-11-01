@@ -398,7 +398,7 @@ const NOMES_STATUS = { ativo: 'ATIVO', resolvido: 'LIBERADO', travado: 'TRAVADO'
 let cenario, prog, embutido = null, NS = 'nt.base';
 let mestre = false, aba = 'construir', selId = null, modal = null, confirmacao = null;
 let canal = null, audio = null, saida = null, ambiente = null, salvaTimer = null, ultimoSom = 0, ultimoAviso = 0;
-let focoSom = null, audioLiberado = false, mudo = false, ultimoForte = 0, estadoSom = null, marcaContagem = null, marcaPrazo = null;
+let focoSom = null, audioLiberado = false, mudo = false, ambienteLigado = false, ultimoForte = 0, estadoSom = null, marcaContagem = null, marcaPrazo = null;
 
 const h = (tag, attrs, ...filhos) => {
   const el = document.createElement(tag);
@@ -699,7 +699,7 @@ function tocaAmbiente(tipo) {
 }
 function atualizaAmbiente() {
   if (audio && saida) saida.gain.setTargetAtTime(volumeSaida(), audio.currentTime, 0.02);
-  const quero = !mestre && audioLiberado && cenario.sons && prog.terminal === 'ok' ? cenario.ambiente : 'off';
+  const quero = !mestre && audioLiberado && ambienteLigado && cenario.sons && prog.terminal === 'ok' ? cenario.ambiente : 'off';
   if ((ambiente ? ambiente.tipo : 'off') === quero) return;
   paraAmbiente();
   if (quero !== 'off') tocaAmbiente(quero);
@@ -1187,6 +1187,7 @@ function telaJogador() {
   const f = finais[prog.terminal];
   return h('div', { class: 'tela' },
     h('div', { class: 'topo' }, h('div', {}, h('h1', {}, cenario.titulo), cenario.subtitulo ? h('small', {}, cenario.subtitulo) : null), h('span', { class: 'esp' }), prog.contagem ? h('span', { class: 'relogio', id: 'relogio' }, formata(restoContagem())) : null,
+      cenario.sons && cenario.ambiente !== 'off' ? h('button', { 'aria-pressed': ambienteLigado ? 'true' : 'false', onclick: () => { ambienteLigado = !ambienteLigado; grava('nt.ambiente', ambienteLigado ? '1' : '0'); render(); } }, ambienteLigado ? 'AMBIENTE: ON' : 'AMBIENTE: OFF') : null,
       cenario.sons ? h('button', { 'aria-pressed': mudo ? 'false' : 'true', onclick: () => { mudo = !mudo; grava('nt.mudo', mudo ? '1' : '0'); render(); } }, mudo ? 'SOM: OFF' : 'SOM: ON') : null),
     h('div', { class: 'colunas' }, cols),
     h('button', { class: 'acesso', title: 'Configuração', 'aria-label': 'Configuração', onclick: pedeSenha }, '⚙'),
@@ -1347,7 +1348,7 @@ function abaGeral() {
       campo('CRT', selecao(cenario, 'crt', { off: 'Desligado', leve: 'Leve', pesado: 'Pesado' })), campo('Degradação de sinal', selecao(cenario, 'sinal', { off: 'Desligada', leve: 'Leve', pesado: 'Pesada' })),
       h('div', { class: 'campo' }, marca(cenario, 'sons', 'Sons ligados'))),
     h('h3', {}, 'Som'),
-    h('div', { class: 'campos' }, campo('Volume (0 a 100)', entradaNum(cenario, 'volume', { max: 100 })), campo('Ambiente contínuo', selecao(cenario, 'ambiente', { servidor: 'Sala de servidores', chuva: 'Chuva na cidade', off: 'Sem ambiente' })),
+    h('div', { class: 'campos' }, campo('Volume (0 a 100)', entradaNum(cenario, 'volume', { max: 100 })), campo('Ambiente contínuo', selecao(cenario, 'ambiente', { servidor: 'Sala de servidores', chuva: 'Chuva na cidade', off: 'Sem ambiente' }), 'Começa desligado. Cada jogador liga no botão AMBIENTE.'),
       h('div', { class: 'campo' }, h('span', {}, 'Teste aqui'), h('button', { onclick: () => { if (cenario.ambiente === 'off') return toast('Escolha um ambiente.'); ligaAudio(); paraAmbiente(); saida.gain.value = volumeSaida(); tocaAmbiente(cenario.ambiente); setTimeout(paraAmbiente, 4000); } }, 'Ouvir ambiente (4s)'))),
     h('div', { class: 'acoes' }, Object.entries(ROTULOS_SOM).map(([k, v]) => h('button', { onclick: () => { ligaAudio(); saida.gain.value = volumeSaida(); sfx(k, k === 'glitch' ? 900 : 3, true); } }, v))),
     h('h3', {}, 'Sequência de boot'),
@@ -1535,6 +1536,7 @@ async function inicia() {
     if (e.key === 'Escape' && modal && !confirmacao) fechaModal();
   });
   mudo = ler('nt.mudo') === '1';
+  ambienteLigado = ler('nt.ambiente') === '1';
   document.addEventListener('pointerdown', liberaAudio, { capture: true });
   document.addEventListener('keydown', liberaAudio, { capture: true });
   document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('button'); if (b && !b.disabled && !b.closest('.bloco,.g-breach,.g-circ,.g-mem,.teclado,.alfabeto,.cifra,.boot')) sfx('click'); }, true);
