@@ -139,6 +139,7 @@ legend{color:var(--p);font-size:12px;letter-spacing:.1em;text-transform:uppercas
 .pill.resolvido{color:var(--ok);border-color:var(--ok)}
 .pill.travado{color:var(--alerta);border-color:var(--alerta)}
 .pill.quebrado{color:var(--perigo);border-color:var(--perigo)}
+.alerta-no{border:1px solid var(--alerta);color:var(--alerta);padding:8px 10px;margin-bottom:12px;font-size:13.5px}
 .erro-carga{padding:30px;max-width:640px;margin:auto}
 @media (max-width:760px){.m-corpo{grid-template-columns:1fr;overflow:auto}.tela{padding:8px}body{overflow:auto}.painel{overflow:visible}}
 </style>
@@ -397,7 +398,8 @@ const NOMES_STATUS = { ativo: 'ATIVO', resolvido: 'LIBERADO', travado: 'TRAVADO'
 
 let cenario, prog, embutido = null, NS = 'nt.base';
 let mestre = false, aba = 'construir', selId = null, modal = null, confirmacao = null;
-let canal = null, audio = null, saida = null, ambiente = null, salvaTimer = null, ultimoSom = 0, ultimoAviso = 0;
+let canal = null, audio = null, saida = null, ambiente = null, cenarioBruto = null, ultimoSom = 0, ultimoAviso = 0;
+const vivoForm = { seg: 120, final: 'desligar', msg: '' };
 let focoSom = null, audioLiberado = false, mudo = false, ambienteLigado = false, ultimoForte = 0, estadoSom = null, marcaContagem = null, marcaPrazo = null;
 
 const h = (tag, attrs, ...filhos) => {
@@ -521,7 +523,7 @@ function normalizar(c) {
     while (p !== null) { if (vistos.has(p)) throw new Error('Há um ciclo na árvore de nós em "' + x.nome + '".'); vistos.add(p); p = nos.find((y) => y.id === p).pai; }
   });
   return {
-    versao: 1, titulo: String(c.titulo ?? 'TERMINAL'), subtitulo: String(c.subtitulo ?? ''), tema: TEMAS[c.tema] ? c.tema : 'neon', crt: c.crt || 'leve', sinal: c.sinal || 'off', sons: c.sons !== false, volume: Number.isFinite(c.volume) ? c.volume : 70, ambiente: ['off', 'servidor', 'chuva'].includes(c.ambiente) ? c.ambiente : 'servidor',
+    versao: 1, titulo: String(c.titulo ?? 'TERMINAL'), subtitulo: String(c.subtitulo ?? ''), tema: TEMAS[c.tema] ? c.tema : 'neon', crt: c.crt || 'leve', sinal: c.sinal || 'off', sons: c.sons !== false, volume: Number.isFinite(c.volume) ? Math.min(100, Math.max(0, c.volume)) : 70, ambiente: ['off', 'servidor', 'chuva'].includes(c.ambiente) ? c.ambiente : 'servidor',
     boot: Object.assign({ ativo: true, linhas: ['INICIANDO...', 'PRONTO'], barra: true, frequencia: 'sessao' }, c.boot),
     rolagem: Object.assign({ criticos: true, empatePassa: false }, c.rolagem), senhaHash: typeof c.senhaHash === 'string' ? c.senhaHash : HASH_INICIAL,
     macros: (Array.isArray(c.macros) ? c.macros : []).map(macroPadrao), nos
@@ -566,17 +568,16 @@ async function carregar() {
   if (!embutido && cru) embutido = JSON.parse(desofusca(cru));
   if (embutido) NS = 'nt.' + embutido.exportId;
   const salvo = ler(NS + '.cenario');
+  cenarioBruto = salvo;
   cenario = normalizar(salvo ? JSON.parse(salvo) : (embutido ? embutido.cenario : cenarioExemplo()));
   const p = ler(NS + '.prog');
   prog = p ? Object.assign(novoProgresso(), JSON.parse(p)) : novoProgresso();
   ultimoSom = prog.som.seq; ultimoAviso = prog.aviso.seq;
 }
 function salvaCenario() {
-  clearTimeout(salvaTimer);
-  salvaTimer = setTimeout(() => {
-    if (!grava(NS + '.cenario', JSON.stringify(cenario))) toast('Não foi possível salvar neste navegador.');
-    transmite({ tipo: 'cenario' });
-  }, 250);
+  cenarioBruto = JSON.stringify(cenario);
+  if (!grava(NS + '.cenario', cenarioBruto)) toast('Não foi possível salvar neste navegador.');
+  transmite({ tipo: 'cenario' });
 }
 function commit() {
   prog.v++;
@@ -587,12 +588,20 @@ function commit() {
 function transmite(msg) { try { if (canal) canal.postMessage(msg); } catch { /* canal indisponível */ } }
 function recebe() {
   const p = ler(NS + '.prog'), c = ler(NS + '.cenario');
-  if (c) { try { cenario = normalizar(JSON.parse(c)); } catch { /* mantém o cenário atual */ } }
+  let cenarioMudou = false;
+  if (c && c !== cenarioBruto) { try { cenario = normalizar(JSON.parse(c)); cenarioBruto = c; cenarioMudou = true; } catch { /* mantém o cenário atual */ } }
   const novo = p ? Object.assign(novoProgresso(), JSON.parse(p)) : novoProgresso();
   prog = novo;
   efeitosRemotos(); aplicaVisual();
-  if (!mestre || aba === 'vivo') render();
-  if (modal) renderModal();
+  if (!mestre || aba === 'vivo' || cenarioMudou) render();
+  atualizaModal();
+}
+function assinaturaModal() {
+  const s = pn(modal.id);
+  return [s.status, s.rev, s.rodada, s.portaAberta, s.portaTrancada, s.travadoAte, s.forceFalhou].join();
+}
+function atualizaModal() {
+  if (modal && modal.id && modal.assinatura !== assinaturaModal()) renderModal();
 }
 function efeitosRemotos() {
   if (prog.som.seq > ultimoSom) { ultimoSom = prog.som.seq; if (!mestre) sfx(prog.som.nome); }
@@ -743,9 +752,10 @@ function acessivel(n) {
   return n.tipo !== 'porta' || portaAberta(n);
 }
 const difEfetiva = (n) => DIFICULDADES[Math.max(0, Math.min(3, DIFICULDADES.indexOf(n.protecao.dificuldade) + pn(n.id).difAjuste))];
+const assinaturaPuzzle = (n) => [n.protecao.puzzle, difEfetiva(n), n.protecao.alvo].join('|');
 function garantePuzzle(n) {
-  const s = pn(n.id);
-  if (!s.puzzle) { s.puzzle = gerar(n.protecao.puzzle, difEfetiva(n), n.protecao.alvo); commit(); }
+  const s = pn(n.id), marca = assinaturaPuzzle(n);
+  if (!s.puzzle || s.puzzleDe !== marca) { s.puzzle = gerar(n.protecao.puzzle, difEfetiva(n), n.protecao.alvo); s.puzzleDe = marca; commit(); }
   return s.puzzle;
 }
 function dispara(macroId) {
@@ -788,7 +798,7 @@ function contaFalha(n) {
 }
 function reseta(n, novoPuzzle) {
   const s = pn(n.id);
-  Object.assign(s, { status: 'ativo', tentativas: 0, travadoAte: null, forceFalhou: false, testeFeito: false, difAjuste: 0, prazoAte: null, rodada: 0, revelados: [], criptoFalhas: 0, portaAberta: null, portaTrancada: null });
+  Object.assign(s, { status: 'ativo', tentativas: 0, travadoAte: null, forceFalhou: false, testeFeito: false, difAjuste: 0, prazoAte: null, rodada: 0, revelados: [], criptoFalhas: 0, portaAberta: null, portaTrancada: null, macroFeita: false });
   if (novoPuzzle) s.puzzle = null;
   s.rev++;
   commit();
@@ -823,6 +833,7 @@ function renderModal() {
   const n = noPorId(modal.id);
   if (!n) return fechaModal();
   const s = pn(n.id);
+  modal.assinatura = assinaturaModal();
   if (s.rev !== modal.rev) { modal.rev = s.rev; modal.etapa = 'intro'; modal.jogo = null; }
   if (modal.tipo === 'conteudo') return tela(telaConteudo(n));
   if (s.status === 'travado' || s.status === 'quebrado') return tela(telaBloqueio(n));
@@ -1220,16 +1231,25 @@ function campo(rotulo, el, nota, todo) {
   if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', rotulo);
   return h('div', { class: 'campo' + (todo ? ' todo' : '') }, h('span', {}, rotulo), el, nota ? h('small', {}, nota) : null);
 }
-const entradaTexto = (obj, k, aoMudar, attrs) => h('input', { type: 'text', value: obj[k] ?? '', oninput: (e) => { obj[k] = e.target.value; salvaCenario(); if (aoMudar) aoMudar(); }, ...attrs });
-const entradaNum = (obj, k, attrs) => h('input', { type: 'number', min: 0, value: obj[k], oninput: (e) => { obj[k] = e.target.value === '' ? 0 : Number(e.target.value); salvaCenario(); }, ...attrs });
+const entradaTexto = (obj, k, aoMudar, attrs) => h('input', { type: 'text', value: obj[k] ?? '', oninput: (e) => { obj[k] = e.target.value; salvaCenario(); if (aoMudar) aoMudar(e.target); }, ...attrs });
+const entradaNum = (obj, k, attrs = {}) => {
+  const min = attrs.min ?? 0, max = attrs.max ?? Infinity;
+  return h('input', { type: 'number', value: obj[k], oninput: (e) => {
+    if (e.target.value === '') { obj[k] = min; salvaCenario(); return; }
+    const v = Math.min(max, Math.max(min, Number(e.target.value) || 0));
+    obj[k] = v;
+    if (Number(e.target.value) !== v) e.target.value = v;
+    salvaCenario();
+  }, ...attrs, min });
+};
 const areaTexto = (obj, k) => h('textarea', { oninput: (e) => { obj[k] = e.target.value; salvaCenario(); } }, obj[k] || '');
-const selecao = (obj, k, ops, reabre) => h('select', { onchange: (e) => { obj[k] = e.target.value; salvaCenario(); if (reabre) render(); } }, Object.entries(ops).map(([v, t]) => h('option', { value: v, selected: String(obj[k]) === v }, t)));
+const selecao = (obj, k, ops, reabre, bloqueadas = []) => h('select', { onchange: (e) => { obj[k] = e.target.value; salvaCenario(); if (reabre) render(); } }, Object.entries(ops).map(([v, t]) => h('option', { value: v, selected: String(obj[k]) === v, disabled: bloqueadas.includes(v) }, t)));
 const marca = (obj, k, txt, reabre) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: obj[k], onchange: (e) => { obj[k] = e.target.checked; salvaCenario(); if (reabre) render(); } }), txt);
 const opcoesMacro = () => Object.fromEntries([['', 'Nenhuma'], ...cenario.macros.map((m) => [m.id, m.rotulo])]);
 
 function renderMestre(app) {
   const ABAS = { construir: 'Construir', geral: 'Geral', macros: 'Macros', vivo: 'Ao vivo', publicar: 'Publicar' };
-  const topo = h('div', { class: 'topo' }, h('div', {}, h('h1', {}, 'Configuração'), h('small', {}, cenario.titulo)), h('span', { class: 'esp' }),
+  const topo = h('div', { class: 'topo' }, h('div', {}, h('h1', {}, 'Configuração'), h('small', { id: 'titulo-mestre' }, cenario.titulo)), h('span', { class: 'esp' }),
     h('div', { class: 'm-abas', role: 'tablist' }, Object.entries(ABAS).map(([k, t]) => h('button', { class: aba === k ? 'sel' : '', role: 'tab', 'aria-selected': aba === k ? 'true' : 'false', onclick: () => { aba = k; render(); } }, t))),
     h('button', { onclick: () => { mestre = false; aba = 'construir'; sessaoGrava(NS + '.mestre', null); render(); } }, 'Sair para modo jogador'));
   const miolo = { construir: abaConstruir, geral: abaGeral, macros: abaMacros, vivo: abaVivo, publicar: abaPublicar }[aba]();
@@ -1248,9 +1268,31 @@ function abaConstruir() {
   const adiciona = (pai) => { const n = noPadrao({ pai }); cenario.nos.push(n); selId = n.id; salvaCenario(); render(); };
   return h('div', { class: 'm-corpo' },
     h('div', { class: 'painel' }, h('h3', {}, 'Caminho do hack'),
-      h('div', { class: 'acoes', style: 'margin:0 0 10px' }, h('button', { class: 'forte', onclick: () => adiciona(sel ? sel.pai : null) }, '+ Nó'), h('button', { disabled: !sel, onclick: () => adiciona(sel.id) }, '+ Filho')),
+      h('div', { class: 'acoes', style: 'margin:0 0 10px' }, h('button', { class: 'forte', onclick: () => adiciona(sel ? sel.pai : null) }, '+ Nó'), h('button', { disabled: !sel || sel.estrutura === 'titulo', onclick: () => adiciona(sel.id) }, '+ Filho')),
       arvore.length ? arvore : h('p', {}, 'Nenhum nó ainda. Crie o primeiro.')),
     h('div', { class: 'painel' }, sel ? formNo(sel) : h('p', {}, 'Selecione ou crie um nó.')));
+}
+function problemasDoNo(n) {
+  const p = n.protecao, lista = [], alvo = Puzzles.normalizaTexto(p.alvo).replace(/ /g, '');
+  if (n.estrutura === 'titulo') return lista;
+  if (p.tipo === 'senha' && !String(p.codigo).trim()) lista.push('Proteção sem senha: ninguém consegue abrir.');
+  if (p.tipo === 'teclado' && !String(p.codigo)) lista.push('Teclado sem código: ninguém consegue abrir.');
+  if (p.tipo === 'hack' && p.puzzle === 'palavras' && alvo && (alvo.length < 4 || alvo.length > 10)) lista.push('A senha a descobrir precisa ter de 4 a 10 letras. Do jeito que está, será sorteada outra.');
+  if (p.tipo === 'hack' && p.puzzle === 'cripto' && alvo && alvo.length < 4) lista.push('A frase secreta é curta demais. Do jeito que está, será sorteada outra.');
+  return lista;
+}
+function painelAlertas(n) {
+  const el = h('div', { 'data-alertas': n.id });
+  preencheAlertas(el, n);
+  return el;
+}
+function preencheAlertas(el, n) {
+  const lista = problemasDoNo(n);
+  el.replaceChildren(...(lista.length ? [h('div', { class: 'alerta-no', role: 'status' }, lista.map((t) => h('div', {}, t)))] : []));
+}
+function atualizaAlertas(n) {
+  const el = document.querySelector('[data-alertas="' + n.id + '"]');
+  if (el) preencheAlertas(el, n);
 }
 function descendentes(id) { return filhos(id).flatMap((n) => [n.id, ...descendentes(n.id)]); }
 function moveNo(n, dir) {
@@ -1281,11 +1323,12 @@ function formNo(n) {
   const pais = Object.fromEntries([['', '(raiz)'], ...cenario.nos.filter((x) => !proibidos.has(x.id) && x.estrutura !== 'titulo').map((x) => [x.id, x.nome])]);
   const paiSel = h('select', { onchange: (e) => { n.pai = e.target.value || null; salvaCenario(); render(); } }, Object.entries(pais).map(([v, t]) => h('option', { value: v, selected: (n.pai || '') === v }, t)));
   const blocos = [
+    painelAlertas(n),
     h('div', { class: 'acoes', style: 'margin:0 0 12px' }, h('button', { onclick: () => moveNo(n, -1) }, 'Subir'), h('button', { onclick: () => moveNo(n, 1) }, 'Descer'), h('button', { onclick: () => duplicaNo(n) }, 'Duplicar'), h('button', { class: 'risco', onclick: () => excluiNo(n) }, 'Excluir')),
     h('div', { class: 'campos' },
       campo('Nome', entradaTexto(n, 'nome', () => { const e = document.getElementById('arv-' + n.id); if (e) e.textContent = n.nome; })),
       campo('Fica dentro de', paiSel),
-      campo('Estrutura', selecao(n, 'estrutura', { normal: 'Nó clicável', titulo: 'Título de seção' }, true)))
+      campo('Estrutura', selecao(n, 'estrutura', { normal: 'Nó clicável', titulo: 'Título de seção' }, true, filhos(n.id).length ? ['titulo'] : []), filhos(n.id).length ? 'Nó com filhos não pode virar título.' : null))
   ];
   if (n.estrutura === 'titulo') return blocos;
   blocos.push(h('div', { class: 'campos', style: 'margin-top:10px' },
@@ -1306,12 +1349,12 @@ function formProtecao(n) {
   const f = h('fieldset', {}, h('legend', {}, 'Proteção'), h('div', { class: 'campos' }, campo('Tipo', selecao(p, 'tipo', { nenhuma: 'Nenhuma', senha: 'Senha', teclado: 'Teclado numérico', hack: 'Minigame de hack' }, true))));
   if (p.tipo === 'nenhuma') return f;
   const c = [];
-  if (p.tipo === 'senha') c.push(campo('Senha', entradaTexto(p, 'codigo')));
-  if (p.tipo === 'teclado') c.push(campo('Código (1 a 5 dígitos)', entradaTexto(p, 'codigo', null, { inputmode: 'numeric', maxlength: 5 })));
+  if (p.tipo === 'senha') c.push(campo('Senha', entradaTexto(p, 'codigo', () => atualizaAlertas(n))));
+  if (p.tipo === 'teclado') c.push(campo('Código (1 a 5 dígitos)', h('input', { type: 'text', inputmode: 'numeric', value: p.codigo, oninput: (e) => { p.codigo = e.target.value.replace(/\D/g, '').slice(0, 5); e.target.value = p.codigo; salvaCenario(); atualizaAlertas(n); } })));
   if (p.tipo === 'hack') {
     c.push(campo('Minigame', selecao(p, 'puzzle', NOMES_PUZZLE, true)), campo('Dificuldade', selecao(p, 'dificuldade', NOMES_DIF)), campo('Tempo limite (segundos)', entradaNum(p, 'tempo'), '0 = sem limite'));
-    if (p.puzzle === 'palavras') c.push(campo('Senha a descobrir', entradaTexto(p, 'alvo'), 'Opcional. De 4 a 10 letras; vazio sorteia.'));
-    if (p.puzzle === 'cripto') c.push(campo('Frase secreta', entradaTexto(p, 'alvo'), 'Opcional. Vazio sorteia uma frase.'));
+    if (p.puzzle === 'palavras') c.push(campo('Senha a descobrir', entradaTexto(p, 'alvo', () => atualizaAlertas(n)), 'Opcional. De 4 a 10 letras; vazio sorteia.'));
+    if (p.puzzle === 'cripto') c.push(campo('Frase secreta', entradaTexto(p, 'alvo', () => atualizaAlertas(n)), 'Opcional. Vazio sorteia uma frase.'));
     if (p.puzzle === 'memoria') c.push(campo('Repetições da sequência', entradaNum(p, 'replays'), '0 = sem limite'));
   }
   c.push(campo('Máximo de erros', entradaNum(p, 'maxTentativas'), '0 = sem limite'), campo('Se esgotar os erros', selecao(p, 'naFalha', NOMES_CONSEQ, true)));
@@ -1343,7 +1386,7 @@ function abaGeral() {
   };
   return h('div', { class: 'm-corpo um' }, h('div', { class: 'painel pilha' },
     h('h3', {}, 'Identidade'),
-    h('div', { class: 'campos' }, campo('Título', entradaTexto(cenario, 'titulo')), campo('Subtítulo', entradaTexto(cenario, 'subtitulo')),
+    h('div', { class: 'campos' }, campo('Título', entradaTexto(cenario, 'titulo', () => { document.getElementById('titulo-mestre').textContent = cenario.titulo; })), campo('Subtítulo', entradaTexto(cenario, 'subtitulo')),
       campo('Tema', selecao(cenario, 'tema', Object.fromEntries(Object.entries(TEMAS).map(([k, v]) => [k, v.nome])), true)),
       campo('CRT', selecao(cenario, 'crt', { off: 'Desligado', leve: 'Leve', pesado: 'Pesado' })), campo('Degradação de sinal', selecao(cenario, 'sinal', { off: 'Desligada', leve: 'Leve', pesado: 'Pesada' })),
       h('div', { class: 'campo' }, marca(cenario, 'sons', 'Sons ligados'))),
@@ -1365,22 +1408,22 @@ function abaMacros() {
   return h('div', { class: 'm-corpo um' }, h('div', { class: 'painel' }, h('h3', {}, 'Macros'), h('p', {}, 'Efeitos prontos para disparar ao vivo ou por falha e sucesso de um nó.'),
     h('div', { class: 'acoes', style: 'margin-bottom:12px' }, h('button', { class: 'forte', onclick: add }, '+ Macro')),
     cenario.macros.map((m) => h('fieldset', {}, h('legend', {}, m.rotulo), h('div', { class: 'campos' },
-      campo('Nome', entradaTexto(m, 'rotulo')), campo('Atmosfera', selecao(m, 'atmos', ATM)), campo('Sinal', selecao(m, 'sinal', INT)), campo('CRT', selecao(m, 'crt', INT)),
+      campo('Nome', entradaTexto(m, 'rotulo', (el) => { el.closest('fieldset').querySelector('legend').textContent = m.rotulo; })), campo('Atmosfera', selecao(m, 'atmos', ATM)), campo('Sinal', selecao(m, 'sinal', INT)), campo('CRT', selecao(m, 'crt', INT)),
       campo('Glitch (ms)', entradaNum(m, 'glitchMs')), campo('Som', selecao(m, 'som', { '': 'Nenhum', ...ROTULOS_SOM })), campo('Aviso na tela', entradaTexto(m, 'aviso'), null, true),
       h('div', { class: 'campo' }, marca(m.contagem, 'ativa', 'Inicia contagem regressiva', true)), m.contagem.ativa ? campo('Segundos', entradaNum(m.contagem, 'seg')) : null, m.contagem.ativa ? campo('Ao zerar', selecao(m.contagem, 'final', NOMES_FINAL)) : null),
-    h('div', { class: 'acoes' }, h('button', { onclick: () => { aplicaMacro(m); commit(); toast('Macro disparada na tela dos jogadores.'); } }, 'Disparar agora'), h('button', { class: 'risco', onclick: () => confirmar('Excluir a macro "' + m.rotulo + '"?', () => { cenario.macros = cenario.macros.filter((x) => x !== m); salvaCenario(); render(); }) }, 'Excluir'))))));
+    h('div', { class: 'acoes' }, h('button', { onclick: () => { aplicaMacro(m); commit(); toast('Macro disparada na tela dos jogadores.'); } }, 'Disparar agora'), h('button', { class: 'risco', onclick: () => confirmar('Excluir a macro "' + m.rotulo + '"?', () => { cenario.macros = cenario.macros.filter((x) => x !== m); cenario.nos.forEach((n) => { if (n.macro === m.id) n.macro = ''; if (n.protecao.macroFalha === m.id) n.protecao.macroFalha = ''; if (n.protecao.macroSucesso === m.id) n.protecao.macroSucesso = ''; }); salvaCenario(); render(); }) }, 'Excluir'))))));
 }
 function respostaDe(n) {
   const p = n.protecao, s = pn(n.id);
   if (p.tipo === 'senha' || p.tipo === 'teclado') return 'Código: ' + (p.codigo || '(vazio)');
   if (p.tipo !== 'hack') return n.cripto.ativo ? 'Criptografado: camada ' + s.rodada + ' de ' + n.cripto.rodadas : '';
-  return s.puzzle ? s.puzzle.resposta : 'Puzzle ainda não gerado';
+  return s.puzzle && s.puzzleDe === assinaturaPuzzle(n) ? s.puzzle.resposta : 'Puzzle ainda não gerado';
 }
 function abaVivo() {
   const atos = (rot, fn, cl) => h('button', { class: cl, onclick: () => { fn(); commit(); render(); } }, rot);
-  const seg = h('input', { type: 'number', min: 1, value: 120, 'aria-label': 'Segundos' });
-  const fim = h('select', { 'aria-label': 'Ao zerar' }, Object.entries(NOMES_FINAL).map(([k, v]) => h('option', { value: k }, v)));
-  const msg = h('input', { type: 'text', 'aria-label': 'Aviso', placeholder: 'Mensagem para a tela' });
+  const seg = h('input', { type: 'number', min: 1, value: vivoForm.seg, 'aria-label': 'Segundos', oninput: (e) => { vivoForm.seg = e.target.value; } });
+  const fim = h('select', { 'aria-label': 'Ao zerar', onchange: (e) => { vivoForm.final = e.target.value; } }, Object.entries(NOMES_FINAL).map(([k, v]) => h('option', { value: k, selected: vivoForm.final === k }, v)));
+  const msg = h('input', { type: 'text', 'aria-label': 'Aviso', placeholder: 'Mensagem para a tela', value: vivoForm.msg, oninput: (e) => { vivoForm.msg = e.target.value; } });
   const envia = (t) => { prog.aviso = { seq: prog.aviso.seq + 1, txt: t }; ultimoAviso = prog.aviso.seq; commit(); };
   const c = prog.contagem;
   const esquerda = h('div', { class: 'pilha' },
@@ -1390,8 +1433,8 @@ function abaVivo() {
       c ? h('p', { class: 'relogio', id: 'relogio' }, formata(restoContagem())) : null,
       h('div', { class: 'campos' }, campo('Segundos', seg), campo('Ao zerar', fim)),
       h('div', { class: 'acoes' }, atos('Iniciar', () => iniciaContagem(Number(seg.value) || 60, fim.value)), c ? atos(c.resto !== null ? 'Continuar' : 'Pausar', () => { if (c.resto !== null) { c.ate = Date.now() + c.resto; c.resto = null; } else c.resto = c.ate - Date.now(); }) : null, c ? atos('Parar', () => { prog.contagem = null; }) : null)),
-    h('div', { class: 'painel' }, h('h3', {}, 'Aviso na tela'), msg, h('div', { class: 'acoes' }, h('button', { onclick: () => { if (msg.value) { envia(msg.value); msg.value = ''; } } }, 'Enviar'))),
-    h('div', { class: 'painel' }, h('h3', {}, 'Terminal: ' + prog.terminal), h('div', { class: 'acoes', style: 'margin:0' }, atos('Religar', () => { prog.terminal = 'ok'; }), atos('Desligar', () => { prog.terminal = 'desligado'; }, 'risco'), atos('Explodir', () => { prog.terminal = 'explodido'; }, 'risco'))));
+    h('div', { class: 'painel' }, h('h3', {}, 'Aviso na tela'), msg, h('div', { class: 'acoes' }, h('button', { onclick: () => { if (msg.value) { envia(msg.value); msg.value = ''; vivoForm.msg = ''; } } }, 'Enviar'))),
+    h('div', { class: 'painel' }, h('h3', {}, 'Terminal: ' + prog.terminal), h('div', { class: 'acoes', style: 'margin:0' }, atos('Religar', () => { prog.terminal = 'ok'; }), atos('Desligar', () => { prog.terminal = 'desligado'; }, 'risco'), atos('Corromper', () => { prog.terminal = 'corrompido'; }, 'risco'), atos('Explodir', () => { prog.terminal = 'explodido'; }, 'risco'))));
   const lista = h('div', { class: 'painel' }, h('h3', {}, 'Nós'), h('p', {}, 'Jogadores em: ' + (prog.aberto.map((i) => (noPorId(i) || {}).nome).filter(Boolean).join(' > ') || 'início')),
     cenario.nos.filter((n) => n.estrutura !== 'titulo').map((n) => {
       const s = pn(n.id);
@@ -1401,7 +1444,7 @@ function abaVivo() {
         respostaDe(n) ? h('div', { class: 'resp' }, respostaDe(n)) : null,
         h('div', { class: 'btns' },
           p ? atos('Liberar', () => { s.status = 'ativo'; resolver(n); }) : null,
-          p ? h('button', { onclick: () => { reseta(n, false); render(); } }, 'Resetar') : null,
+          p || n.cripto.ativo || s.status !== 'ativo' ? h('button', { onclick: () => { reseta(n, false); render(); } }, 'Resetar') : null,
           n.protecao.tipo === 'hack' ? h('button', { onclick: () => { reseta(n, true); render(); } }, 'Novo puzzle') : null,
           atos('Travar', () => { s.status = 'travado'; s.travadoAte = null; }),
           atos('Quebrar', () => { s.status = 'quebrado'; }, 'risco'),
@@ -1414,7 +1457,7 @@ function abaVivo() {
 const baixa = (nome, conteudo, tipo) => {
   const u = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
   const a = h('a', { href: u, download: nome }); document.body.append(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(u), 2000);
+  setTimeout(() => URL.revokeObjectURL(u), 60000);
 };
 const slug = () => (Puzzles.normalizaTexto(cenario.titulo).toLowerCase().trim().replace(/\s+/g, '-') || 'terminal').slice(0, 40);
 function exportaJogadores() {
@@ -1433,11 +1476,14 @@ async function mostraLink(saida) {
 }
 function abaPublicar() {
   const saidaLink = h('div', { class: 'campo' });
-  const arquivo =h('input', { type: 'file', accept: '.json,application/json', 'aria-label': 'Arquivo de cenário', onchange: (e) => {
+  const comProblema = cenario.nos.filter((n) => problemasDoNo(n).length);
+  const arquivo = h('input', { type: 'file', accept: '.json,application/json', onchange: (e) => {
     const f = e.target.files[0];
     if (!f) return;
+    e.target.value = '';
     f.text().then((t) => {
-      const c = normalizar(JSON.parse(t));
+      const dados = JSON.parse(t), c = normalizar(dados);
+      if (!dados.senhaHash) c.senhaHash = cenario.senhaHash;
       confirmar('Substituir o cenário atual por "' + c.titulo + '"? O cenário atual será perdido se não tiver sido exportado.', () => {
         cenario = c; selId = null; salvaCenario(); render(); toast('Cenário importado.');
       });
@@ -1445,6 +1491,7 @@ function abaPublicar() {
   } });
   return h('div', { class: 'm-corpo um' }, h('div', { class: 'painel pilha' },
     h('h3', {}, 'Liberar para os jogadores'),
+    comProblema.length ? h('div', { class: 'alerta-no', role: 'status' }, comProblema.length + ' nó(s) precisam de atenção: ' + comProblema.map((n) => n.nome).join(', ')) : null,
     h('p', {}, 'O link leva o cenário inteiro. Quem abrir entra no modo jogador, e o mestre pode abrir o mesmo link em outro aparelho, digitar a senha e continuar editando. Troque a senha inicial antes de gerar o link.'),
     h('div', { class: 'acoes', style: 'margin:0' }, h('button', { class: 'forte', onclick: () => mostraLink(saidaLink) }, 'Copiar link para jogadores'), h('button', { onclick: exportaJogadores }, 'Exportar arquivo HTML')),
     saidaLink,
@@ -1454,7 +1501,7 @@ function abaPublicar() {
     h('h3', {}, 'Sessão'),
     h('div', { class: 'acoes', style: 'margin:0' },
       h('button', { class: 'risco', onclick: () => confirmar('Apagar todo o progresso dos jogadores? O cenário não muda.', () => { const s = prog.som.seq, a = prog.aviso.seq, v = prog.v; prog = novoProgresso(); prog.v = v; prog.som.seq = s; prog.aviso.seq = a; commit(); render(); toast('Progresso apagado.'); }) }, 'Resetar progresso'),
-      h('button', { class: 'risco', onclick: () => confirmar('Trocar o cenário atual pelo exemplo?', () => { const hash = cenario.senhaHash; cenario = cenarioExemplo(); cenario.senhaHash = hash; selId = null; salvaCenario(); render(); }) }, 'Carregar exemplo'))));
+      h('button', { class: 'risco', onclick: () => confirmar('Trocar o cenário atual pelo exemplo?', () => { const hash = cenario.senhaHash; cenario = normalizar(cenarioExemplo()); cenario.senhaHash = hash; selId = null; salvaCenario(); render(); }) }, 'Carregar exemplo'))));
 }
 
 function tique() {
@@ -1485,7 +1532,7 @@ function tique() {
     if (m[c.final]) prog.terminal = m[c.final];
     prog.contagem = null; mudou = true;
   }
-  if (mudou) { commit(); if (!mestre || aba === 'vivo') render(); if (modal) renderModal(); }
+  if (mudou) { commit(); if (!mestre || aba === 'vivo') render(); atualizaModal(); }
   const rel = document.getElementById('relogio');
   if (rel && prog.contagem) { const resto = restoContagem(); rel.textContent = formata(resto); r.dataset.urgente = resto < 30000 ? '1' : '0'; } else r.dataset.urgente = '0';
   if (modal && modal.id) {

@@ -19,3 +19,13 @@ Depois de qualquer edição, gere um novo link. O progresso dos jogadores fica n
 O cenário vai comprimido depois do `#` da URL, então a hospedagem não recebe esse conteúdo e não é preciso banco de dados.
 
 Quem tiver o link consegue extrair as respostas e o hash da senha com alguma técnica. A senha evita acesso casual à configuração, mas não é proteção real.
+
+## Testes
+
+Os testes de ponta a ponta usam Playwright e rodam contra uma cópia local da página.
+
+```bash
+npm install
+npx playwright install chromium
+npm run test:e2e
+```
