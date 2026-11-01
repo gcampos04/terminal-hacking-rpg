@@ -1,0 +1,1431 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Terminal</title>
+<script id="dados" type="text/plain"></script>
+<style>
+:root{--p:#ff2a6d;--t:#05d9e8;--f:#0b0614;--s:#150b24;--b:#3b2358;--ok:#39ff88;--alerta:#ffb000;--perigo:#ff3b3b;--fonte:"Cascadia Mono","Cascadia Code",Consolas,"DejaVu Sans Mono",Menlo,monospace}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--f);color:var(--t);font:15px/1.5 var(--fonte);overflow:hidden}
+html[data-atmos=aviso] body{--p:#ffb000;--t:#ffd98a;--b:#6a4a10}
+html[data-atmos=critico] body{--p:#ff3b3b;--t:#ffb3b3;--b:#6e1c1c}
+html[data-atmos=critico] .tela{animation:pulso 1.2s infinite}
+@keyframes pulso{50%{box-shadow:inset 0 0 90px rgba(255,40,40,.4)}}
+html[data-glitch="1"] #app,html[data-glitch="1"] #modal{animation:glitch .22s steps(2) infinite}
+@keyframes glitch{0%{transform:translate(2px,-1px) skewX(1deg);filter:hue-rotate(40deg)}50%{transform:translate(-3px,1px);filter:invert(.12)}100%{transform:translate(1px,2px) skewX(-1deg)}}
+html:not([data-mestre="1"])[data-crt=leve] body::after,html:not([data-mestre="1"])[data-crt=pesado] body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;background:repeating-linear-gradient(0deg,rgba(0,0,0,.2) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.45))}
+html:not([data-mestre="1"])[data-crt=pesado] body::after{background:repeating-linear-gradient(0deg,rgba(0,0,0,.38) 0 2px,transparent 2px 4px),radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.7))}
+html:not([data-mestre="1"])[data-sinal=leve] body::before,html:not([data-mestre="1"])[data-sinal=pesado] body::before{content:"";position:fixed;inset:-40px;pointer-events:none;z-index:49;opacity:.07;background:repeating-linear-gradient(90deg,#fff 0 1px,transparent 1px 7px),repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 5px);animation:ruido .25s steps(3) infinite}
+html:not([data-mestre="1"])[data-sinal=pesado] body::before{opacity:.18}
+@keyframes ruido{33%{transform:translate(9px,-7px)}66%{transform:translate(-13px,5px)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--s);border:1px solid var(--b);padding:7px 12px;cursor:pointer;border-radius:3px}
+button:hover:not(:disabled){border-color:var(--p);color:var(--p)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--p);outline-offset:1px}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.forte{background:var(--p);border-color:var(--p);color:var(--f);font-weight:700}
+button.forte:hover:not(:disabled){color:var(--f);filter:brightness(1.15)}
+button.risco{border-color:var(--perigo);color:var(--perigo)}
+input,select,textarea{background:#00000055;border:1px solid var(--b);padding:7px 9px;border-radius:3px;width:100%}
+select option{background:var(--f)}
+textarea{min-height:110px;resize:vertical}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:.06em}
+#app{height:100%}
+.tela{height:100%;display:flex;flex-direction:column;padding:14px;gap:12px}
+.topo{display:flex;align-items:center;gap:14px;border:1px solid var(--b);border-left:4px solid var(--p);padding:10px 14px;background:var(--s);flex-wrap:wrap}
+.topo h1{font-size:20px;color:var(--p);text-transform:uppercase}
+.topo small{opacity:.75}
+.topo .esp{flex:1}
+.relogio{font-size:24px;font-weight:700;color:var(--alerta);font-variant-numeric:tabular-nums}
+html[data-urgente="1"] .relogio{color:var(--perigo);animation:pisca .6s infinite}
+@keyframes pisca{50%{opacity:.35}}
+.colunas{flex:1;display:flex;gap:12px;overflow-x:auto;min-height:0}
+.coluna{flex:0 0 270px;max-width:82vw;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:8px;border:1px solid var(--b);background:#00000040}
+.bloco{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 12px;border-left:3px solid var(--b)}
+.bloco .nm{flex:1;min-width:0;overflow-wrap:anywhere}
+.bloco .tag{font-size:11px;opacity:.85;letter-spacing:.08em}
+.bloco.sel{background:var(--p);color:var(--f);border-color:var(--p)}
+.bloco.sel:hover:not(:disabled){color:var(--f)}
+.bloco.prot{border-left-color:var(--alerta)}
+.bloco.quebrado{border-left-color:var(--perigo);opacity:.7}
+.titulo-col{font-size:12px;letter-spacing:.14em;opacity:.7;text-transform:uppercase;padding:8px 2px 2px;border-bottom:1px dashed var(--b)}
+.acesso{position:fixed;right:5px;bottom:3px;z-index:60;background:none;border:0;opacity:.28;padding:6px;font-size:13px}
+#modal:empty{display:none}
+#modal{position:fixed;inset:0;background:#000000b8;display:flex;align-items:center;justify-content:center;padding:14px;z-index:40}
+.caixa{background:var(--f);border:1px solid var(--p);width:min(760px,100%);max-height:100%;display:flex;flex-direction:column;box-shadow:0 0 34px #0009}
+.caixa>header{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--b);background:var(--s)}
+.caixa>header h2{font-size:15px;flex:1;color:var(--p);text-transform:uppercase;overflow-wrap:anywhere}
+.corpo{padding:16px;overflow:auto;flex:1}
+.acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.acoes.centro{justify-content:center}
+.leitura{white-space:pre-wrap;overflow-wrap:anywhere}
+.linha-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;opacity:.85;margin-bottom:10px}
+.barra{height:6px;background:#ffffff18;margin-bottom:12px}
+.barra i{display:block;height:100%;background:var(--p);transition:width .25s linear}
+.grande{font-size:24px;font-weight:700;text-align:center;letter-spacing:.08em;padding:10px 0}
+.ok{color:var(--ok)}.ruim{color:var(--perigo)}.alerta{color:var(--alerta)}
+.teclado{display:grid;grid-template-columns:repeat(3,minmax(64px,88px));gap:8px;justify-content:center;margin-top:10px}
+.teclado button{padding:14px;font-size:20px}
+.visor{font-size:26px;letter-spacing:.4em;text-align:center;border:1px solid var(--b);padding:8px;min-height:54px}
+.g-breach{display:grid;gap:6px;justify-content:center;margin:10px 0}
+.g-breach button{width:clamp(38px,11vw,50px);height:clamp(38px,11vw,50px);padding:0}
+.g-breach button.ativo{border-color:var(--p);color:var(--p);box-shadow:0 0 0 1px var(--p) inset}
+.g-breach button.usado{opacity:.2}
+.fila{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:5px 0}
+.fila .cod{border:1px solid var(--b);min-width:34px;text-align:center;padding:2px 5px}
+.fila .cod.vazio{opacity:.35}
+.fila.feito .cod{border-color:var(--ok);color:var(--ok)}
+.dump{display:flex;gap:18px;flex-wrap:wrap;font-size:14px;line-height:1.4}
+.dump .l{white-space:pre}
+.dump .end{opacity:.5;margin-right:8px}
+.dump .tok{cursor:pointer}
+.dump .tok.foco{background:var(--p);color:var(--f)}
+.dump .usado{opacity:.35;cursor:default}
+.log{flex:1 1 170px;min-width:170px;font-size:13px;max-height:280px;overflow:auto}
+.g-circ{display:grid;gap:3px;justify-content:center;margin:6px 0}
+.g-circ button{padding:0;width:clamp(44px,12vw,62px);height:clamp(44px,12vw,62px);display:block}
+.g-circ svg{display:block;width:100%;height:100%}
+.g-circ .fixo{cursor:default}
+.cifra{display:flex;flex-wrap:wrap;gap:12px 16px;margin-bottom:14px}
+.cifra .pal{display:flex;gap:3px}
+.cifra button{width:30px;padding:2px 0;line-height:1.2}
+.cifra button b{display:block;min-height:1.3em;color:var(--ok)}
+.cifra button.sel{border-color:var(--p);box-shadow:0 0 0 1px var(--p) inset}
+.alfabeto{display:flex;flex-wrap:wrap;gap:4px}
+.alfabeto button{width:34px;padding:5px 0}
+.g-mem{display:grid;gap:8px;justify-content:center;margin:12px 0}
+.g-mem button{width:clamp(50px,14vw,76px);height:clamp(50px,14vw,76px)}
+.g-mem button.aceso{background:var(--p);border-color:var(--p)}
+.fim-tela{position:fixed;inset:0;z-index:45;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px}
+.fim-tela h2{font-size:30px;color:var(--perigo)}
+.fim-tela.explosao{animation:clarao .9s ease-out}
+@keyframes clarao{0%{background:#fff}30%{background:#ff8a2a}100%{background:#000}}
+.boot{position:fixed;inset:0;z-index:48;background:var(--f);padding:8vh 8vw;cursor:pointer}
+.boot .barra{max-width:420px;margin-top:18px}
+.toasts{position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:47;display:flex;flex-direction:column;gap:8px;width:min(560px,92vw);pointer-events:none}
+.toast{background:var(--f);border:1px solid var(--p);border-left:5px solid var(--p);padding:9px 13px;color:var(--p)}
+.m-abas{display:flex;gap:6px;flex-wrap:wrap}
+.m-abas button.sel{background:var(--p);color:var(--f);border-color:var(--p)}
+.m-corpo{flex:1;min-height:0;display:grid;gap:12px;grid-template-columns:minmax(250px,330px) 1fr}
+.m-corpo.um{grid-template-columns:1fr;overflow:auto}
+.painel{border:1px solid var(--b);background:#00000040;padding:12px;overflow:auto;min-height:0}
+.painel h3{font-size:13px;color:var(--p);margin:0 0 10px;text-transform:uppercase}
+.painel+.painel{margin-top:0}
+.pilha{display:grid;gap:12px;align-content:start}
+.no-arv{display:flex;gap:6px;align-items:center;padding:5px 7px;border:1px solid transparent;cursor:pointer;border-radius:3px;width:100%;background:none;text-align:left}
+.no-arv.sel{border-color:var(--p);background:var(--s)}
+.no-arv .nm{flex:1;min-width:0;overflow-wrap:anywhere}
+.no-arv .tag{font-size:11px;color:var(--alerta)}
+.campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.campo{display:grid;gap:3px;align-content:start}
+.campo label,.campo>span{font-size:12px;opacity:.8}
+.campo.todo{grid-column:1/-1}
+.campo small{opacity:.65;font-size:11.5px}
+.chk{display:flex;gap:8px;align-items:center;font-size:13.5px;cursor:pointer}
+.chk input{width:auto}
+fieldset{border:1px solid var(--b);padding:12px;margin:12px 0 0;min-width:0}
+legend{color:var(--p);font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:0 6px}
+.vivo-no{display:grid;gap:6px;padding:9px 0;border-bottom:1px dashed var(--b)}
+.vivo-no .cab{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline}
+.vivo-no .cab b{flex:1;min-width:130px}
+.vivo-no .resp{font-size:12.5px;color:var(--alerta);overflow-wrap:anywhere}
+.vivo-no .btns{display:flex;gap:5px;flex-wrap:wrap}
+.vivo-no .btns button{padding:3px 8px;font-size:12.5px}
+.pill{font-size:11px;border:1px solid var(--b);padding:0 6px;letter-spacing:.06em}
+.pill.resolvido{color:var(--ok);border-color:var(--ok)}
+.pill.travado{color:var(--alerta);border-color:var(--alerta)}
+.pill.quebrado{color:var(--perigo);border-color:var(--perigo)}
+.erro-carga{padding:30px;max-width:640px;margin:auto}
+@media (max-width:760px){.m-corpo{grid-template-columns:1fr;overflow:auto}.tela{padding:8px}body{overflow:auto}.painel{overflow:visible}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="modal"></div>
+<script id="puzzles">
+(function (g) {
+  'use strict';
+  const ALEA = () => Math.random();
+  const int = (n) => Math.floor(ALEA() * n);
+  const entre = (a, b) => a + int(b - a + 1);
+  const escolhe = (l) => l[int(l.length)];
+  const mistura = (l) => { const c = [...l]; for (let i = c.length - 1; i > 0; i--) { const j = int(i + 1); [c[i], c[j]] = [c[j], c[i]]; } return c; };
+
+  const DIFICULDADES = ['facil', 'normal', 'dificil', 'expert'];
+  const TABELA = {
+    breach: { facil: { n: 4, buffer: 5, seqs: 2, len: [2, 2] }, normal: { n: 5, buffer: 5, seqs: 2, len: [2, 3] }, dificil: { n: 5, buffer: 5, seqs: 3, len: [3, 3] }, expert: { n: 6, buffer: 5, seqs: 3, len: [3, 4] } },
+    palavras: { facil: { len: [4, 5], qtd: 6, pares: 4 }, normal: { len: [5, 6], qtd: 7, pares: 3 }, dificil: { len: [6, 8], qtd: 8, pares: 2 }, expert: { len: [8, 10], qtd: 9, pares: 1 } },
+    circuito: { facil: { n: 4, alvos: 1 }, normal: { n: 5, alvos: 1 }, dificil: { n: 5, alvos: 2 }, expert: { n: 6, alvos: 2 } },
+    cripto: { facil: { erros: 8, dicas: 4 }, normal: { erros: 5, dicas: 3 }, dificil: { erros: 4, dicas: 2 }, expert: { erros: 3, dicas: 1 } },
+    memoria: { facil: { n: 3, seq: 3, mostra: 600, pausa: 300 }, normal: { n: 4, seq: 4, mostra: 500, pausa: 250 }, dificil: { n: 4, seq: 6, mostra: 400, pausa: 200 }, expert: { n: 5, seq: 8, mostra: 350, pausa: 150 } }
+  };
+
+  const CODIGOS = ['A7', '3C', 'D1', '5E', 'F0', '9B', '2D', 'E4'];
+  const BANCO = 'CHIP NODE DADO FIOS CODE HACK REDE LOGS NEON ROOT BYTE SCAN PORT DUMP CRED LINK MESH ZERO GRID CAOS ' +
+    'SINAL PROXY CHAVE VIRUS TOKEN SETOR PIXEL ROTAS DADOS CYBER LOGIN SHELL LASER DRONE NUVEM CORPO TRAMA CLONE FALHA TURBO ' +
+    'SERVER NEURAL CODIGO ACESSO BINARY DAEMON SOCKET CIFRAS MATRIZ SONDAS REATOR CAMERA BUFFER MEMORY TUNNEL FIBRAS ALARME PORTAL GLITCH ' +
+    'SISTEMA CIRCUIT IMPLANT CONSOLE GATEWAY PACOTES ARQUIVO MONITOR SCANNER PAYLOAD ROUTERS SPECTRE VIGILIA NETWORK SEGREDO CONTROL ' +
+    'FIREWALL BACKDOOR TERMINAL PROTOCOL CIRCUITO PASSWORD DATABASE MAINLINE OVERRIDE SENTINEL SOFTWARE HARDWARE CONEXOES IMPLANTE MALWARES BLACKOUT REPLICAS ' +
+    'NETRUNNER MEGACORPO PROTOCOLO SEGURANCA MAINFRAME BIOMETRIA CYBERDECK NEUROLINK OPERADORA VIGILANTE INTRUSION SATELLITE CIBERNETA FIRMWARES PROGRAMAS TERMINAIS EVIDENCIA ' +
+    'MEGACORPOS HOLOGRAMAS SENTINELAS CYBERSPACE DECRIPTADO ASSINATURA REPLICANTE VIGILANTES MICROCHIPS OPERADORES PROTOCOLOS FREQUENCIA INFORMANTE ENCRIPTADO MAINFRAMES CREDENCIAL SUBSISTEMA';
+  const PALAVRAS = BANCO.split(' ');
+  const FRASES = ['A CIDADE NUNCA ESQUECE SEU ROSTO', 'QUEM CONTROLA OS DADOS CONTROLA A RUA', 'O CONTRATO ERA UMA ARMADILHA', 'NINGUEM SAI LIMPO DA TORRE', 'A SENHA ESTA NO ANDAR DE BAIXO', 'NAO CONFIE NO SEU FIXER', 'O ALVO SABE QUE VOCES VIERAM', 'DESLIGUE AS CAMERAS ANTES DA MEIA NOITE', 'O CREDITO ACABA ANTES DA CHUVA', 'TODA REDE TEM UMA PORTA ESQUECIDA', 'A LUZ DE NEON ESCONDE O SANGUE', 'OS DRONES OBEDECEM AO MAIOR LANCE'];
+
+  function normalizaTexto(t) {
+    return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z ]/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  function caminhoBreach(n, buffer) {
+    for (;;) {
+      const cam = [[0, int(n)]];
+      const usado = new Set([cam[0].join()]);
+      let porColuna = true, preso = false;
+      while (cam.length < buffer) {
+        const [r, c] = cam[cam.length - 1];
+        const op = [];
+        for (let i = 0; i < n; i++) { const p = porColuna ? [i, c] : [r, i]; if (!usado.has(p.join())) op.push(p); }
+        if (!op.length) { preso = true; break; }
+        const p = escolhe(op);
+        cam.push(p); usado.add(p.join()); porColuna = !porColuna;
+      }
+      if (!preso) return cam;
+    }
+  }
+
+  function gerarBreach(d) {
+    for (;;) {
+      const grade = Array.from({ length: d.n }, () => Array.from({ length: d.n }, () => escolhe(CODIGOS)));
+      const cam = caminhoBreach(d.n, d.buffer);
+      const seq = cam.map(([r, c]) => grade[r][c]);
+      const daemons = [], vistos = new Set();
+      for (let t = 0; t < 60 && daemons.length < d.seqs; t++) {
+        const len = entre(d.len[0], d.len[1]);
+        const ini = int(d.buffer - len + 1);
+        const s = seq.slice(ini, ini + len);
+        if (!vistos.has(s.join())) { vistos.add(s.join()); daemons.push(s); }
+      }
+      if (daemons.length === d.seqs) return { tipo: 'breach', n: d.n, buffer: d.buffer, grade, daemons, caminho: cam, resposta: 'Sequência: ' + seq.join(' ') };
+    }
+  }
+
+  function bufferContem(buf, seq) {
+    for (let i = 0; i + seq.length <= buf.length; i++) if (seq.every((v, j) => buf[i + j] === v)) return true;
+    return false;
+  }
+
+  function resolveBreach(p) {
+    const passo = (buf, usados, r, c, porLinha) => {
+      if (p.daemons.every((s) => bufferContem(buf, s))) return true;
+      if (buf.length >= p.buffer) return false;
+      for (let i = 0; i < p.n; i++) {
+        const a = porLinha ? [r, i] : [i, c], k = a.join();
+        if (usados.has(k)) continue;
+        usados.add(k); buf.push(p.grade[a[0]][a[1]]);
+        if (passo(buf, usados, a[0], a[1], !porLinha)) return true;
+        buf.pop(); usados.delete(k);
+      }
+      return false;
+    };
+    return passo([], new Set(), 0, 0, true);
+  }
+
+  function gerarPalavras(d, alvoCru) {
+    const alvoNorm = normalizaTexto(alvoCru).replace(/ /g, '');
+    const alvoOk = alvoNorm.length >= 4 && alvoNorm.length <= 10;
+    const len = alvoOk ? alvoNorm.length : entre(d.len[0], d.len[1]);
+    const base = PALAVRAS.filter((p) => p.length === len && p !== alvoNorm);
+    const alvo = alvoOk ? alvoNorm : escolhe(base);
+    const outras = mistura(base.filter((p) => p !== alvo)).slice(0, d.qtd - 1);
+    const palavras = mistura([alvo, ...outras]);
+    const lixo = '!@#$%^&*-+=/\\|:;,.?~_';
+    const fechar = { '[': ']', '(': ')', '{': '}', '<': '>' };
+    const pares = Array.from({ length: d.pares }, () => {
+      const a = escolhe(Object.keys(fechar));
+      let m = ''; for (let i = entre(1, 4); i > 0; i--) m += lixo[int(lixo.length)];
+      return a + m + fechar[a];
+    });
+    const fichas = mistura([...palavras.map((w) => ({ t: 'w', v: w })), ...pares.map((v) => ({ t: 'b', v }))]);
+    const total = 28 * 12;
+    let sobra = total - fichas.reduce((s, f) => s + f.v.length, 0);
+    const lacunas = new Array(fichas.length + 1).fill(0);
+    const minimo = Math.min(2, Math.floor(sobra / lacunas.length));
+    lacunas.forEach((_, i) => { lacunas[i] = minimo; }); sobra -= minimo * lacunas.length;
+    while (sobra-- > 0) lacunas[int(lacunas.length)]++;
+    const fluxo = [];
+    const encher = (q) => { for (let i = 0; i < q; i++) fluxo.push({ t: 'g', v: lixo[int(lixo.length)] }); };
+    fichas.forEach((f, i) => { encher(lacunas[i]); fluxo.push(f); });
+    encher(lacunas[lacunas.length - 1]);
+    return { tipo: 'palavras', palavras, alvo, fluxo, resposta: alvo };
+  }
+
+  const semelhanca = (a, b) => [...a].filter((c, i) => c === b[i]).length;
+  const giraMascara = (m, v) => { for (let i = 0; i < v; i++) m = ((m << 1) & 15) | (m >> 3); return m; };
+  const VIZ = [[-1, 0, 1, 4], [0, 1, 2, 8], [1, 0, 4, 1], [0, -1, 8, 2]];
+
+  function rotaCircuito(n, de, ate, bloqueado) {
+    const vis = new Set([de.join()]);
+    const passo = (a) => {
+      if (a[0] === ate[0] && a[1] === ate[1]) return [a];
+      for (const [dr, dc] of mistura(VIZ)) {
+        const b = [a[0] + dr, a[1] + dc], k = b.join();
+        if (b[0] < 0 || b[1] < 0 || b[0] >= n || b[1] >= n || vis.has(k) || bloqueado.has(k)) continue;
+        vis.add(k);
+        const r = passo(b);
+        if (r) return [a, ...r];
+      }
+      return null;
+    };
+    return passo(de);
+  }
+
+  function ligados(p) {
+    const n = p.n, cel = (r, c) => p.celulas[r * n + c];
+    const mask = (x) => giraMascara(x.m, x.r);
+    const vistos = new Set([p.fonte.join()]), fila = [p.fonte];
+    while (fila.length) {
+      const [r, c] = fila.pop();
+      const m = mask(cel(r, c));
+      for (const [dr, dc, bit, op] of VIZ) {
+        const a = r + dr, b = c + dc, k = a + ',' + b;
+        if (a < 0 || b < 0 || a >= n || b >= n || vistos.has(k) || !(m & bit) || !(mask(cel(a, b)) & op)) continue;
+        vistos.add(k); fila.push([a, b]);
+      }
+    }
+    return vistos;
+  }
+  const circuitoFechado = (p) => { const v = ligados(p); return p.alvos.every((a) => v.has(a.join())); };
+
+  function gerarCircuito(d) {
+    for (;;) {
+      const n = d.n;
+      const linhas = mistura([...Array(n).keys()]);
+      const fonte = [int(n), 0];
+      const alvos = Array.from({ length: d.alvos }, (_, i) => [linhas[i], n - 1]);
+      const masc = new Array(n * n).fill(0);
+      const usados = new Set();
+      const liga = (rota) => {
+        rota.forEach((a, i) => {
+          usados.add(a.join());
+          const b = rota[i + 1];
+          if (!b) return;
+          for (const [dr, dc, bit, op] of VIZ) if (a[0] + dr === b[0] && a[1] + dc === b[1]) { masc[a[0] * n + a[1]] |= bit; masc[b[0] * n + b[1]] |= op; }
+        });
+      };
+      const bloq1 = new Set(alvos.slice(1).map((a) => a.join()));
+      const r1 = rotaCircuito(n, fonte, alvos[0], bloq1);
+      if (!r1) continue;
+      liga(r1);
+      let okRotas = true;
+      for (const a of alvos.slice(1)) {
+        const meio = r1.slice(0, -1);
+        const ini = escolhe(meio);
+        const bloq = new Set([...usados].filter((k) => k !== ini.join()));
+        const r = rotaCircuito(n, ini, a, bloq);
+        if (!r) { okRotas = false; break; }
+        liga(r);
+      }
+      if (!okRotas) continue;
+      const celulas = masc.map((m, i) => {
+        const r = Math.floor(i / n), c = i % n;
+        const eFonte = r === fonte[0] && c === fonte[1];
+        const eAlvo = alvos.some((a) => a[0] === r && a[1] === c);
+        if (eFonte || eAlvo) return { m, r: 0, fixo: true, papel: eFonte ? 'fonte' : 'alvo' };
+        return { m: m || escolhe([5, 3]), r: int(4), fixo: false, papel: 'fio' };
+      });
+      const p = { tipo: 'circuito', n, fonte, alvos, celulas, resposta: 'Ligue a fonte a ' + (alvos.length > 1 ? 'todos os destinos' : 'o destino') + ' girando as peças' };
+      if (!circuitoFechado(p)) return p;
+    }
+  }
+
+  function gerarCripto(d, alvoCru) {
+    const propria = normalizaTexto(alvoCru);
+    const frase = propria.replace(/ /g, '').length >= 4 ? propria : escolhe(FRASES);
+    const abc = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+    let sub;
+    do { sub = mistura(abc); } while (sub.some((c, i) => c === abc[i]));
+    const mapa = {}; abc.forEach((c, i) => { mapa[c] = sub[i]; });
+    const letras = [...new Set(frase.replace(/ /g, ''))];
+    const dicas = mistura(letras).slice(0, Math.min(d.dicas, Math.max(0, letras.length - 1)));
+    return { tipo: 'cripto', frase, cifra: [...frase].map((c) => (c === ' ' ? ' ' : mapa[c])).join(''), dicas, erros: d.erros, resposta: frase };
+  }
+
+  function gerarMemoria(d) {
+    const seq = [];
+    while (seq.length < d.seq) { const c = int(d.n * d.n); if (c !== seq[seq.length - 1]) seq.push(c); }
+    return { tipo: 'memoria', n: d.n, seq, mostra: d.mostra, pausa: d.pausa, resposta: 'Casas: ' + seq.map((c) => c + 1).join(', ') };
+  }
+
+  function gerar(tipo, dificuldade, alvo) {
+    const t = tipo === 'aleatorio' ? escolhe(Object.keys(TABELA)) : tipo;
+    const d = TABELA[t][dificuldade];
+    if (t === 'breach') return gerarBreach(d);
+    if (t === 'palavras') return gerarPalavras(d, alvo);
+    if (t === 'circuito') return gerarCircuito(d);
+    if (t === 'cripto') return gerarCripto(d, alvo);
+    return gerarMemoria(d);
+  }
+
+  g.Puzzles = { DIFICULDADES, TABELA, PALAVRAS, gerar, resolveBreach, bufferContem, semelhanca, giraMascara, ligados, circuitoFechado, normalizaTexto };
+})(window);
+</script>
+<script id="principal">
+'use strict';
+const FONTE = '<!doctype html>\n' + document.documentElement.outerHTML;
+const SAL = 'nt-terminal::';
+const HASH_INICIAL = 'b1e34541f4525c5a7a4a4993c247ccc75a13b8e5ff22ba17df43e54616d905b1';
+const CHAVE_OFUSCA = 'neon-chuva-cromo';
+const { DIFICULDADES, gerar, bufferContem, semelhanca, giraMascara, ligados, circuitoFechado } = Puzzles;
+
+const TEMAS = {
+  neon: { nome: 'Neon', p: '#ff2a6d', t: '#05d9e8', f: '#0b0614', s: '#150b24', b: '#3b2358' },
+  acido: { nome: 'Ácido', p: '#c6ff00', t: '#7dffb2', f: '#071009', s: '#0e1a11', b: '#2c4a32' },
+  ambar: { nome: 'Âmbar', p: '#ffb000', t: '#ffcf70', f: '#0e0a03', s: '#1a1307', b: '#4c3a12' },
+  fosforo: { nome: 'Fósforo', p: '#35ff7a', t: '#27d96a', f: '#030b06', s: '#08160d', b: '#14482a' },
+  gelo: { nome: 'Gelo', p: '#8fd3ff', t: '#dbeeff', f: '#060b13', s: '#0d1623', b: '#2a4563' },
+  sangue: { nome: 'Sangue', p: '#ff4040', t: '#ffb0a8', f: '#0e0405', s: '#1b090b', b: '#5a1c20' }
+};
+const NOMES_PUZZLE = { breach: 'Quebra de Protocolo', palavras: 'Matriz de Palavras', circuito: 'Relé de Circuito', cripto: 'Criptograma', memoria: 'Matriz de Memória', aleatorio: 'Aleatório' };
+const NOMES_DIF = { facil: 'Fácil', normal: 'Normal', dificil: 'Difícil', expert: 'Expert' };
+const NOMES_CONSEQ = { travar: 'Travar até o mestre liberar', travarTempo: 'Travar por um tempo', quebrar: 'Quebrar para sempre', novo: 'Gerar outro puzzle (sem travar)' };
+const NOMES_FINAL = { desligar: 'Desligar', corromper: 'Corromper', explodir: 'Explodir', nada: 'Nada (só zera)' };
+const NOMES_STATUS = { ativo: 'ATIVO', resolvido: 'LIBERADO', travado: 'TRAVADO', quebrado: 'QUEBRADO' };
+
+let cenario, prog, embutido = null, NS = 'nt.base';
+let mestre = false, aba = 'construir', selId = null, modal = null, confirmacao = null;
+let canal = null, audio = null, salvaTimer = null, ultimoSom = 0, ultimoAviso = 0;
+
+const h = (tag, attrs, ...filhos) => {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k === 'class') el.className = v;
+    else if (k === 'value') el.value = v;
+    else if (k === 'checked' || k === 'disabled' || k === 'selected') el[k] = !!v;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  filhos.flat(Infinity).forEach((f) => { if (f !== null && f !== undefined && f !== false) el.append(f.nodeType ? f : String(f)); });
+  return el;
+};
+const uid = () => 'n' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+const ler = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const grava = (k, v) => { try { localStorage.setItem(k, v); return true; } catch { return false; } };
+const remove = (k) => { try { localStorage.removeItem(k); } catch { /* armazenamento bloqueado */ } };
+const sessaoLer = (k) => { try { return sessionStorage.getItem(k); } catch { return null; } };
+const sessaoGrava = (k, v) => { try { if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch { /* armazenamento bloqueado */ } };
+
+function sha256(texto) {
+  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  const K = [], H = [];
+  let n = 2;
+  const primo = (x) => { for (let i = 2; i * i <= x; i++) if (x % i === 0) return false; return true; };
+  while (K.length < 64) {
+    if (primo(n)) {
+      if (H.length < 8) H.push((Math.sqrt(n) % 1 * 4294967296) >>> 0);
+      K.push((Math.cbrt(n) % 1 * 4294967296) >>> 0);
+    }
+    n++;
+  }
+  const bytes = [...new TextEncoder().encode(texto)];
+  const bits = bytes.length * 8;
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  for (let i = 7; i >= 0; i--) bytes.push(i >= 4 ? 0 : (bits >>> (i * 8)) & 255);
+  for (let i = 0; i < bytes.length; i += 64) {
+    const w = new Array(64);
+    for (let t = 0; t < 16; t++) w[t] = ((bytes[i + t * 4] << 24) | (bytes[i + t * 4 + 1] << 16) | (bytes[i + t * 4 + 2] << 8) | bytes[i + t * 4 + 3]) >>> 0;
+    for (let t = 16; t < 64; t++) {
+      const s0 = rotr(w[t - 15], 7) ^ rotr(w[t - 15], 18) ^ (w[t - 15] >>> 3);
+      const s1 = rotr(w[t - 2], 17) ^ rotr(w[t - 2], 19) ^ (w[t - 2] >>> 10);
+      w[t] = (w[t - 16] + s0 + w[t - 7] + s1) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, hh] = H;
+    for (let t = 0; t < 64; t++) {
+      const t1 = (hh + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + K[t] + w[t]) >>> 0;
+      const t2 = ((rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+      hh = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    [a, b, c, d, e, f, g, hh].forEach((v, j) => { H[j] = (H[j] + v) >>> 0; });
+  }
+  return H.map((v) => v.toString(16).padStart(8, '0')).join('');
+}
+
+function ofusca(texto) {
+  const b = new TextEncoder().encode(texto);
+  const saida = b.map((x, i) => x ^ CHAVE_OFUSCA.charCodeAt(i % CHAVE_OFUSCA.length));
+  let s = ''; for (let i = 0; i < saida.length; i += 8192) s += String.fromCharCode(...saida.subarray(i, i + 8192));
+  return btoa(s);
+}
+function desofusca(b64) {
+  const bin = atob(b64);
+  const b = Uint8Array.from(bin, (c, i) => c.charCodeAt(0) ^ CHAVE_OFUSCA.charCodeAt(i % CHAVE_OFUSCA.length));
+  return new TextDecoder().decode(b);
+}
+
+function protecaoPadrao(t) {
+  return Object.assign({ tipo: 'nenhuma', codigo: '', puzzle: 'breach', dificuldade: 'normal', tempo: 0, intro: '', alvo: '', maxTentativas: 3, naFalha: 'travar', noTempo: 'travar', travaSeg: 60, replays: 0, teste: { ativo: false, dv: 13 }, force: { ativo: false, dv: 17 }, macroFalha: '', macroSucesso: '' }, t);
+}
+function noPadrao(t) {
+  const n = Object.assign({ id: uid(), pai: null, nome: 'Novo nó', estrutura: 'normal', tipo: 'texto', texto: '', oculto: false, macro: '' }, t);
+  n.protecao = protecaoPadrao(t && t.protecao);
+  n.protecao.teste = Object.assign({ ativo: false, dv: 13 }, t && t.protecao && t.protecao.teste);
+  n.protecao.force = Object.assign({ ativo: false, dv: 17 }, t && t.protecao && t.protecao.force);
+  n.porta = Object.assign({ aberta: false, trancada: true }, t && t.porta);
+  n.cripto = Object.assign({ ativo: false, dv: 13, rodadas: 3, contador: true, travaNaFalha: false }, t && t.cripto);
+  return n;
+}
+function macroPadrao(t) {
+  const m = Object.assign({ id: uid(), rotulo: 'Nova macro', atmos: '', sinal: '', crt: '', glitchMs: 0, som: '', aviso: '', contagem: {} }, t);
+  m.contagem = Object.assign({ ativa: false, seg: 60, final: 'desligar' }, t && t.contagem);
+  return m;
+}
+function cenarioExemplo() {
+  const n = (id, pai, nome, resto) => noPadrao({ id, pai, nome, ...resto });
+  return {
+    versao: 1, titulo: 'HELIX-9 // REDE CORPORATIVA', subtitulo: 'Acesso externo não autorizado será rastreado', tema: 'neon', crt: 'leve', sinal: 'off', sons: true,
+    boot: { ativo: true, linhas: ['HELIX-9 OS 7.3', 'NEGOCIANDO CONEXÃO...', 'CONTORNANDO ROTA PÚBLICA...', 'LINK ESTABELECIDO'], barra: true, frequencia: 'sessao' },
+    rolagem: { criticos: true, empatePassa: false }, senhaHash: HASH_INICIAL,
+    macros: [
+      macroPadrao({ id: 'alarme', rotulo: 'Alarme silencioso', atmos: 'aviso', som: 'alarme', glitchMs: 700, aviso: 'RASTREAMENTO INICIADO', contagem: { ativa: true, seg: 300, final: 'desligar' } }),
+      macroPadrao({ id: 'gelo', rotulo: 'Gelo negro', atmos: 'critico', sinal: 'pesado', som: 'alarme', glitchMs: 1500, aviso: 'CONTRAMEDIDA ATIVA NA REDE' }),
+      macroPadrao({ id: 'calma', rotulo: 'Voltar ao normal', atmos: 'normal', sinal: 'off', aviso: 'Sinal estabilizado' })
+    ],
+    nos: [
+      n('t1', null, 'Rede pública', { estrutura: 'titulo' }),
+      n('leia', null, 'Aviso de manutenção', { texto: 'Manutenção programada no anel 3. Use o gateway externo apenas com credencial válida.\n\nDica de quem deixou isso aqui: o pessoal da limpeza sempre usa 7319.' }),
+      n('gw', null, 'Gateway externo', { tipo: 'nenhum', protecao: { tipo: 'hack', puzzle: 'palavras', dificuldade: 'facil', alvo: 'NEON', intro: 'Tela de login antiga. Encontre a senha no dump de memória.', maxTentativas: 4, naFalha: 'travarTempo', travaSeg: 45, macroFalha: 'alarme', force: { ativo: true, dv: 15 } } }),
+      n('cam', 'gw', 'Câmeras do saguão', { texto: 'Câmeras em loop de 12 minutos. O saguão está livre.', protecao: { tipo: 'teclado', codigo: '7319', maxTentativas: 3, naFalha: 'travar', macroFalha: 'alarme' } }),
+      n('rh', 'gw', 'Diretório do RH', { tipo: 'nenhum', protecao: { tipo: 'senha', codigo: 'zero', maxTentativas: 3, naFalha: 'travarTempo', travaSeg: 30 } }),
+      n('ficha', 'rh', 'Ficha: Dra. Sato', { texto: 'Dra. Sato pediu transferência para o andar 41 ontem à noite. O crachá dela ainda abre o núcleo.', cripto: { ativo: true, dv: 13, rodadas: 3, contador: true } }),
+      n('fw', 'gw', 'Firewall interno', { tipo: 'nenhum', protecao: { tipo: 'hack', puzzle: 'breach', dificuldade: 'normal', tempo: 90, intro: 'Injete as sequências antes de o buffer encher.', maxTentativas: 2, naFalha: 'quebrar', noTempo: 'novo', macroFalha: 'gelo', teste: { ativo: true, dv: 13 } } }),
+      n('rele', 'fw', 'Relé de energia', { texto: 'Energia desviada. As portas do andar 41 estão sem alimentação de emergência.', protecao: { tipo: 'hack', puzzle: 'circuito', dificuldade: 'normal', maxTentativas: 0 } }),
+      n('porta', 'fw', 'Porta do servidor', { tipo: 'porta', texto: 'Atrás da porta, o rack principal zumbe no escuro.', protecao: { tipo: 'hack', puzzle: 'memoria', dificuldade: 'normal', maxTentativas: 3, naFalha: 'novo', replays: 2 } }),
+      n('cofre', 'porta', 'Mensagem final', { texto: 'Eles sabem que vocês estão aqui. Saiam pelo elevador de carga.', protecao: { tipo: 'hack', puzzle: 'cripto', dificuldade: 'facil', alvo: 'O ALVO SABE QUE VOCES VIERAM', maxTentativas: 2, naFalha: 'novo' } })
+    ]
+  };
+}
+function normalizar(c) {
+  if (!c || typeof c !== 'object' || !Array.isArray(c.nos)) throw new Error('O arquivo não tem a lista de nós do cenário.');
+  const nos = c.nos.map((x) => { if (!x || typeof x.id !== 'string' || !x.id) throw new Error('Há um nó sem identificador.'); return noPadrao(x); });
+  const ids = new Set(nos.map((x) => x.id));
+  if (ids.size !== nos.length) throw new Error('Há nós com identificador repetido.');
+  nos.forEach((x) => {
+    if (x.pai !== null && !ids.has(x.pai)) throw new Error('O nó "' + x.nome + '" aponta para um pai que não existe.');
+    const vistos = new Set([x.id]); let p = x.pai;
+    while (p !== null) { if (vistos.has(p)) throw new Error('Há um ciclo na árvore de nós em "' + x.nome + '".'); vistos.add(p); p = nos.find((y) => y.id === p).pai; }
+  });
+  return {
+    versao: 1, titulo: String(c.titulo ?? 'TERMINAL'), subtitulo: String(c.subtitulo ?? ''), tema: TEMAS[c.tema] ? c.tema : 'neon', crt: c.crt || 'leve', sinal: c.sinal || 'off', sons: c.sons !== false,
+    boot: Object.assign({ ativo: true, linhas: ['INICIANDO...', 'PRONTO'], barra: true, frequencia: 'sessao' }, c.boot),
+    rolagem: Object.assign({ criticos: true, empatePassa: false }, c.rolagem), senhaHash: typeof c.senhaHash === 'string' ? c.senhaHash : HASH_INICIAL,
+    macros: (Array.isArray(c.macros) ? c.macros : []).map(macroPadrao), nos
+  };
+}
+const novoProgresso = () => ({ v: 0, nos: {}, aberto: [], atmos: null, sinal: null, crt: null, glitchAte: 0, contagem: null, terminal: 'ok', som: { seq: 0, nome: '' }, aviso: { seq: 0, txt: '' } });
+function pn(id) {
+  if (!prog.nos[id]) prog.nos[id] = { status: 'ativo', tentativas: 0, rev: 0, travadoAte: null, forceFalhou: false, testeFeito: false, difAjuste: 0, puzzle: null, prazoAte: null, rodada: 0, revelados: [], criptoFalhas: 0, portaAberta: null, portaTrancada: null, visivel: null };
+  return prog.nos[id];
+}
+
+async function comprime(bytes, Fluxo) {
+  const fluxo = new Blob([bytes]).stream().pipeThrough(new Fluxo('deflate-raw'));
+  return new Uint8Array(await new Response(fluxo).arrayBuffer());
+}
+function semPadrao(o, padrao) {
+  const r = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (JSON.stringify(v) === JSON.stringify(padrao[k])) continue;
+    if (v && typeof v === 'object' && !Array.isArray(v) && padrao[k]) { const d = semPadrao(v, padrao[k]); if (Object.keys(d).length) r[k] = d; } else r[k] = v;
+  }
+  return r;
+}
+async function gerarLink(c) {
+  const enxuto = { ...c, nos: c.nos.map((n) => ({ id: n.id, ...semPadrao(n, noPadrao({ id: n.id })) })), macros: c.macros.map((m) => ({ id: m.id, ...semPadrao(m, macroPadrao({ id: m.id })) })) };
+  const bytes = await comprime(new TextEncoder().encode(JSON.stringify(enxuto)), CompressionStream);
+  let s = ''; for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return location.href.split('#')[0] + '#c=' + btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function cenarioDoLink() {
+  const m = location.hash.match(/^#c=([\w-]+)$/);
+  if (!m) return null;
+  try {
+    const bytes = Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+    const cenarioLink = JSON.parse(new TextDecoder().decode(await comprime(bytes, DecompressionStream)));
+    return { exportId: 'l' + hashTexto(m[1]).toString(36), cenario: cenarioLink };
+  } catch { throw new Error('Este link está incompleto ou corrompido. Peça um novo link ao mestre.'); }
+}
+async function carregar() {
+  const cru = document.getElementById('dados').textContent.trim();
+  embutido = await cenarioDoLink();
+  if (!embutido && cru) embutido = JSON.parse(desofusca(cru));
+  if (embutido) NS = 'nt.' + embutido.exportId;
+  const salvo = ler(NS + '.cenario');
+  cenario = normalizar(salvo ? JSON.parse(salvo) : (embutido ? embutido.cenario : cenarioExemplo()));
+  const p = ler(NS + '.prog');
+  prog = p ? Object.assign(novoProgresso(), JSON.parse(p)) : novoProgresso();
+  ultimoSom = prog.som.seq; ultimoAviso = prog.aviso.seq;
+}
+function salvaCenario() {
+  clearTimeout(salvaTimer);
+  salvaTimer = setTimeout(() => {
+    if (!grava(NS + '.cenario', JSON.stringify(cenario))) toast('Não foi possível salvar neste navegador.');
+    transmite({ tipo: 'cenario' });
+  }, 250);
+}
+function commit() {
+  prog.v++;
+  grava(NS + '.prog', JSON.stringify(prog));
+  transmite({ tipo: 'prog' });
+  aplicaVisual();
+}
+function transmite(msg) { try { if (canal) canal.postMessage(msg); } catch { /* canal indisponível */ } }
+function recebe() {
+  const p = ler(NS + '.prog'), c = ler(NS + '.cenario');
+  if (c) { try { cenario = normalizar(JSON.parse(c)); } catch { /* mantém o cenário atual */ } }
+  const novo = p ? Object.assign(novoProgresso(), JSON.parse(p)) : novoProgresso();
+  prog = novo;
+  efeitosRemotos(); aplicaVisual();
+  if (!mestre || aba === 'vivo') render();
+  if (modal) renderModal();
+}
+function efeitosRemotos() {
+  if (prog.som.seq > ultimoSom) { ultimoSom = prog.som.seq; if (!mestre) sfx(prog.som.nome); }
+  if (prog.aviso.seq > ultimoAviso) { ultimoAviso = prog.aviso.seq; if (!mestre) toast(prog.aviso.txt); }
+}
+
+function sfx(nome) {
+  if (mestre || !cenario.sons || !nome) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+    const nota = (f, ini, dur, tipo = 'square', vol = 0.035) => {
+      const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + ini;
+      o.type = tipo; o.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g).connect(audio.destination); o.start(t); o.stop(t + dur);
+    };
+    ({
+      click: () => nota(880, 0, 0.04),
+      ok: () => { nota(660, 0, 0.09); nota(990, 0.09, 0.14); },
+      erro: () => { nota(170, 0, 0.18, 'sawtooth'); },
+      trava: () => { nota(240, 0, 0.14, 'sawtooth'); nota(120, 0.14, 0.3, 'sawtooth'); },
+      alarme: () => { [0, 0.3, 0.6].forEach((t) => { nota(740, t, 0.14, 'sawtooth', 0.05); nota(520, t + 0.15, 0.14, 'sawtooth', 0.05); }); },
+      boot: () => { nota(220, 0, 0.1); nota(330, 0.1, 0.1); nota(440, 0.2, 0.18); }
+    }[nome] || (() => {}))();
+  } catch { /* áudio indisponível */ }
+}
+function toast(txt) {
+  let c = document.querySelector('.toasts');
+  if (!c) { c = h('div', { class: 'toasts', role: 'status' }); document.body.append(c); }
+  const t = h('div', { class: 'toast' }, txt);
+  c.append(t); setTimeout(() => t.remove(), 5000);
+}
+function aplicaVisual() {
+  const r = document.documentElement, tema = TEMAS[cenario.tema] || TEMAS.neon;
+  Object.entries({ '--p': tema.p, '--t': tema.t, '--f': tema.f, '--s': tema.s, '--b': tema.b }).forEach(([k, v]) => r.style.setProperty(k, v));
+  r.dataset.atmos = prog.atmos || 'normal';
+  r.dataset.crt = prog.crt || cenario.crt;
+  r.dataset.sinal = prog.sinal || cenario.sinal;
+  r.dataset.mestre = mestre ? '1' : '0';
+  document.title = mestre ? 'Configuração — ' + cenario.titulo : cenario.titulo;
+}
+
+const noPorId = (id) => cenario.nos.find((n) => n.id === id);
+const filhos = (pai) => cenario.nos.filter((n) => n.pai === pai);
+const protegido = (n) => n.protecao.tipo !== 'nenhuma';
+const visivel = (n) => { const s = pn(n.id); return s.visivel === null ? !n.oculto : s.visivel; };
+const portaAberta = (n) => { const s = pn(n.id); return s.portaAberta === null ? n.porta.aberta : s.portaAberta; };
+const portaTrancada = (n) => { const s = pn(n.id); return s.portaTrancada === null ? n.porta.trancada : s.portaTrancada; };
+function acessivel(n) {
+  const s = pn(n.id);
+  if (s.status === 'travado' || s.status === 'quebrado') return false;
+  if (protegido(n) && s.status !== 'resolvido') return false;
+  return n.tipo !== 'porta' || portaAberta(n);
+}
+const difEfetiva = (n) => DIFICULDADES[Math.max(0, Math.min(3, DIFICULDADES.indexOf(n.protecao.dificuldade) + pn(n.id).difAjuste))];
+function garantePuzzle(n) {
+  const s = pn(n.id);
+  if (!s.puzzle) { s.puzzle = gerar(n.protecao.puzzle, difEfetiva(n), n.protecao.alvo); commit(); }
+  return s.puzzle;
+}
+function dispara(macroId) {
+  const m = cenario.macros.find((x) => x.id === macroId);
+  if (m) aplicaMacro(m);
+}
+function aplicaMacro(m) {
+  if (m.atmos) prog.atmos = m.atmos;
+  if (m.sinal) prog.sinal = m.sinal;
+  if (m.crt) prog.crt = m.crt;
+  if (m.glitchMs > 0) prog.glitchAte = Date.now() + Number(m.glitchMs);
+  if (m.som) { prog.som = { seq: prog.som.seq + 1, nome: m.som }; ultimoSom = prog.som.seq; sfx(m.som); }
+  if (m.aviso) { prog.aviso = { seq: prog.aviso.seq + 1, txt: m.aviso }; ultimoAviso = prog.aviso.seq; if (!mestre) toast(m.aviso); }
+  if (m.contagem.ativa && !prog.contagem) iniciaContagem(Number(m.contagem.seg), m.contagem.final);
+}
+function iniciaContagem(seg, final) { prog.contagem = { ate: Date.now() + seg * 1000, resto: null, final }; }
+function resolver(n) {
+  const s = pn(n.id);
+  s.status = 'resolvido'; s.prazoAte = null; s.travadoAte = null;
+  if (n.tipo === 'porta') s.portaTrancada = false;
+  dispara(n.protecao.macroSucesso); sfx('ok');
+  commit();
+}
+function consequencia(n, qual) {
+  const s = pn(n.id);
+  s.prazoAte = null;
+  if (qual === 'travar') { s.status = 'travado'; s.travadoAte = null; sfx('trava'); }
+  else if (qual === 'travarTempo') { s.status = 'travado'; s.travadoAte = Date.now() + Number(n.protecao.travaSeg) * 1000; sfx('trava'); }
+  else if (qual === 'quebrar') { s.status = 'quebrado'; sfx('trava'); }
+  else { s.puzzle = null; s.tentativas = 0; s.rev++; }
+}
+function contaFalha(n) {
+  const s = pn(n.id), max = Number(n.protecao.maxTentativas);
+  s.tentativas++; s.prazoAte = null;
+  dispara(n.protecao.macroFalha); sfx('erro');
+  const fim = max > 0 && s.tentativas >= max;
+  if (fim) consequencia(n, n.protecao.naFalha);
+  commit();
+  return fim;
+}
+function reseta(n, novoPuzzle) {
+  const s = pn(n.id);
+  Object.assign(s, { status: 'ativo', tentativas: 0, travadoAte: null, forceFalhou: false, testeFeito: false, difAjuste: 0, prazoAte: null, rodada: 0, revelados: [], criptoFalhas: 0, portaAberta: null, portaTrancada: null });
+  if (novoPuzzle) s.puzzle = null;
+  s.rev++;
+  commit();
+}
+
+function clicarNo(n, nivel) {
+  if (n.estrutura === 'titulo') return;
+  sfx('click');
+  prog.aberto = prog.aberto.slice(0, nivel).concat(n.id);
+  commit();
+  const s = pn(n.id);
+  if (n.macro && !s.macroFeita) { s.macroFeita = true; dispara(n.macro); commit(); }
+  if (protegido(n) && s.status !== 'resolvido' || s.status === 'travado' || s.status === 'quebrado') abreModal({ tipo: 'protecao', id: n.id, etapa: 'intro' });
+  else if (temConteudo(n)) abreModal({ tipo: 'conteudo', id: n.id });
+  render();
+}
+const temConteudo = (n) => n.tipo === 'porta' || (n.tipo === 'texto' && !!n.texto);
+function abreModal(m) { modal = m; m.rev = m.id ? pn(m.id).rev : 0; renderModal(); }
+function fechaModal() { modal = null; document.getElementById('modal').replaceChildren(); render(); }
+function caixa(titulo, ...conteudo) {
+  return h('div', { class: 'caixa', role: 'dialog', 'aria-modal': 'true', 'aria-label': titulo },
+    h('header', {}, h('h2', {}, titulo), h('button', { 'aria-label': 'Fechar', onclick: fechaModal }, 'X')),
+    h('div', { class: 'corpo' }, conteudo));
+}
+function tela(el) { document.getElementById('modal').replaceChildren(el); }
+
+function renderModal() {
+  if (confirmacao) return;
+  if (!modal) return;
+  if (modal.tipo === 'senhaMestre') return renderSenhaMestre();
+  if (modal.tipo === 'teste') return renderTeste();
+  const n = noPorId(modal.id);
+  if (!n) return fechaModal();
+  const s = pn(n.id);
+  if (s.rev !== modal.rev) { modal.rev = s.rev; modal.etapa = 'intro'; modal.jogo = null; }
+  if (modal.tipo === 'conteudo') return tela(telaConteudo(n));
+  if (s.status === 'travado' || s.status === 'quebrado') return tela(telaBloqueio(n));
+  if (s.status === 'resolvido') {
+    if (temConteudo(n)) { modal.tipo = 'conteudo'; return tela(telaConteudo(n)); }
+    return fechaModal();
+  }
+  if (modal.etapa === 'jogo' && modal.jogo) return;
+  if (modal.etapa === 'force') return tela(telaRolagem(n, 'FORÇAR ACESSO', n.protecao.force.dv, 'Falhar nesta tentativa bloqueia a força até o mestre liberar.', (passou) => {
+    if (passou) { resolver(n); renderModal(); render(); } else { s.forceFalhou = true; commit(); modal.etapa = 'intro'; }
+  }));
+  if (modal.etapa === 'teste') return tela(telaRolagem(n, 'TESTE DE PERÍCIA', n.protecao.teste.dv, 'Passar reduz a dificuldade em um nível. Falhar aumenta em um nível.', (passou) => {
+    s.testeFeito = true; s.difAjuste = passou ? -1 : 1; s.puzzle = null; commit(); modal.etapa = 'intro';
+  }));
+  if (n.protecao.tipo === 'senha') return tela(telaSenha(n));
+  if (n.protecao.tipo === 'teclado') return tela(telaTeclado(n));
+  if (modal.etapa === 'falhou') return tela(telaFalhou(n));
+  return tela(telaIntroHack(n));
+}
+function botaoForca(n) {
+  const s = pn(n.id);
+  if (!n.protecao.force.ativo) return null;
+  return h('button', { disabled: s.forceFalhou, onclick: () => { modal.etapa = 'force'; renderModal(); } }, s.forceFalhou ? 'FORÇA: FALHOU' : 'FORÇAR ACESSO');
+}
+function metaTentativas(n) {
+  const max = Number(n.protecao.maxTentativas);
+  return max > 0 ? 'Tentativas: ' + Math.max(0, max - pn(n.id).tentativas) + ' de ' + max : 'Tentativas: sem limite';
+}
+function telaBloqueio(n) {
+  const s = pn(n.id);
+  const quebrado = s.status === 'quebrado';
+  return caixa(n.nome, h('div', { class: 'grande ruim' }, quebrado ? 'SISTEMA DESTRUÍDO' : 'TERMINAL TRAVADO'),
+    h('p', { style: 'text-align:center' }, quebrado ? 'Este nó foi desativado de forma permanente.' : (s.travadoAte ? 'Liberação automática em ' : 'Aguardando reset do operador.')),
+    s.travadoAte && !quebrado ? h('div', { class: 'grande alerta', id: 'trava-resto' }, '--') : null,
+    h('div', { class: 'acoes centro' }, h('button', { onclick: fechaModal }, 'FECHAR')));
+}
+function telaSenha(n) {
+  const entrada = h('input', { type: 'text', autocomplete: 'off', 'aria-label': 'Senha', spellcheck: 'false' });
+  const msg = h('p', { class: 'ruim' });
+  const tenta = () => {
+    if (!entrada.value) return;
+    if (entrada.value.trim().toLowerCase() === String(n.protecao.codigo).trim().toLowerCase()) { resolver(n); renderModal(); render(); return; }
+    const fim = contaFalha(n);
+    if (!fim) { msg.textContent = 'SENHA INCORRETA'; renderModal(); }
+    else renderModal();
+    render();
+  };
+  entrada.addEventListener('keydown', (e) => { if (e.key === 'Enter') tenta(); });
+  setTimeout(() => entrada.focus(), 30);
+  return caixa(n.nome, h('div', { class: 'linha-meta' }, h('span', {}, metaTentativas(n))), h('p', {}, 'Este nó exige uma senha.'), entrada,
+    pn(n.id).tentativas ? h('p', { class: 'ruim' }, 'SENHA INCORRETA') : msg,
+    h('div', { class: 'acoes' }, h('button', { class: 'forte', onclick: tenta }, 'ENVIAR'), botaoForca(n)));
+}
+function telaTeclado(n) {
+  let dig = '';
+  const visor = h('div', { class: 'visor', 'aria-live': 'polite' }, '');
+  const cod = String(n.protecao.codigo);
+  const msg = h('p', { class: 'ruim', style: 'text-align:center;min-height:1.5em' });
+  const atualiza = () => { visor.textContent = '*'.repeat(dig.length); };
+  const envia = () => {
+    if (!dig) return;
+    if (dig === cod) { resolver(n); renderModal(); render(); return; }
+    dig = ''; atualiza();
+    const fim = contaFalha(n);
+    if (fim) { renderModal(); render(); return; }
+    msg.textContent = 'CÓDIGO INVÁLIDO'; meta.textContent = metaTentativas(n);
+  };
+  const meta = h('span', {}, metaTentativas(n));
+  const tecla = (t, fn) => h('button', { onclick: fn }, t);
+  const teclas = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => tecla(d, () => { if (dig.length < 5) { dig += d; atualiza(); sfx('click'); } }));
+  return caixa(n.nome, h('div', { class: 'linha-meta' }, meta), visor, msg,
+    h('div', { class: 'teclado' }, teclas, tecla('C', () => { dig = ''; atualiza(); }), tecla('0', () => { if (dig.length < 5) { dig += '0'; atualiza(); sfx('click'); } }), h('button', { class: 'forte', onclick: envia }, 'OK')),
+    h('div', { class: 'acoes centro' }, botaoForca(n)));
+}
+function telaIntroHack(n) {
+  const s = pn(n.id), p = n.protecao;
+  const tipoNome = p.puzzle === 'aleatorio' ? 'Protocolo desconhecido' : NOMES_PUZZLE[p.puzzle];
+  const precisaTeste = p.teste.ativo && !s.testeFeito;
+  return caixa(n.nome,
+    h('div', { class: 'linha-meta' }, h('span', {}, tipoNome), h('span', {}, 'Dificuldade: ' + NOMES_DIF[difEfetiva(n)]), h('span', {}, metaTentativas(n)), Number(p.tempo) > 0 ? h('span', {}, 'Tempo: ' + p.tempo + 's') : null),
+    p.intro ? h('p', { class: 'leitura' }, p.intro) : h('p', {}, 'Sistema protegido. Inicie o ataque quando estiver pronto.'),
+    h('div', { class: 'acoes' },
+      precisaTeste ? h('button', { class: 'forte', onclick: () => { modal.etapa = 'teste'; renderModal(); } }, 'TESTE DE PERÍCIA') : h('button', { class: 'forte', onclick: () => iniciaJogo(n) }, 'INICIAR HACK'),
+      precisaTeste ? h('button', { onclick: () => iniciaJogo(n) }, 'PULAR TESTE') : null, botaoForca(n)));
+}
+function telaFalhou(n) {
+  return caixa(n.nome, h('div', { class: 'grande ruim' }, modal.motivo || 'FALHOU'), h('div', { class: 'linha-meta', style: 'justify-content:center' }, h('span', {}, metaTentativas(n))),
+    h('div', { class: 'acoes centro' }, h('button', { class: 'forte', onclick: () => iniciaJogo(n) }, 'TENTAR DE NOVO'), h('button', { onclick: fechaModal }, 'SAIR')));
+}
+function iniciaJogo(n) {
+  const s = pn(n.id), puzzle = garantePuzzle(n), tempo = Number(n.protecao.tempo);
+  if (tempo > 0 && !(s.prazoAte > Date.now())) { s.prazoAte = Date.now() + tempo * 1000; commit(); }
+  modal.etapa = 'jogo'; modal.jogo = true;
+  const area = h('div', {});
+  const meta = h('span', { id: 'jogo-tent' }, metaTentativas(n));
+  const barra = tempo > 0 ? h('div', { class: 'barra' }, h('i', { id: 'prazo-barra', style: 'width:100%' })) : null;
+  tela(caixa(n.nome, h('div', { class: 'linha-meta' }, h('span', {}, NOMES_PUZZLE[puzzle.tipo] + ' · ' + NOMES_DIF[difEfetiva(n)]), meta, tempo > 0 ? h('span', { id: 'prazo-txt' }) : null), barra, area));
+  const reavalia = () => { modal.jogo = false; if (modal.etapa === 'jogo') modal.etapa = 'intro'; };
+  Jogos[puzzle.tipo](area, puzzle, {
+    replays: Number(n.protecao.replays),
+    restantes: () => { const m = Number(n.protecao.maxTentativas); return m > 0 ? m - pn(n.id).tentativas : Infinity; },
+    ok: () => { resolver(n); reavalia(); setTimeout(() => { renderModal(); render(); }, 900); },
+    falha: (motivo) => {
+      const fim = contaFalha(n);
+      modal.jogo = false; modal.etapa = fim ? 'intro' : 'falhou'; modal.motivo = motivo;
+      if (fim && pn(n.id).status === 'ativo') modal.motivo = motivo;
+      setTimeout(() => { renderModal(); render(); }, 800);
+    },
+    erro: () => {
+      const fim = contaFalha(n);
+      meta.textContent = metaTentativas(n);
+      if (fim) { reavalia(); setTimeout(() => { renderModal(); render(); }, 800); }
+      return fim;
+    },
+    repor: () => { const st = pn(n.id); if (st.tentativas > 0) { st.tentativas--; commit(); meta.textContent = metaTentativas(n); } },
+    som: sfx
+  });
+}
+function rola() {
+  const d = 1 + Math.floor(Math.random() * 10);
+  if (!cenario.rolagem.criticos) return { total: d, partes: [d] };
+  if (d === 10) { const e = 1 + Math.floor(Math.random() * 10); return { total: 10 + e, partes: [10, '+' + e] }; }
+  if (d === 1) { const e = 1 + Math.floor(Math.random() * 10); return { total: 1 - e, partes: [1, '-' + e] }; }
+  return { total: d, partes: [d] };
+}
+function telaRolagem(n, titulo, dv, nota, aoFim) {
+  const chave = 'nt.mod';
+  const mod = h('input', { type: 'number', value: ler(chave) || '0', 'aria-label': 'Modificador', style: 'max-width:110px' });
+  const saida = h('div', {}), botoes = h('div', { class: 'acoes' });
+  const concluir = (passou, txt) => {
+    botoes.replaceChildren();
+    saida.replaceChildren(h('div', { class: 'grande ' + (passou ? 'ok' : 'ruim') }, passou ? 'SUCESSO' : 'FALHA'), txt ? h('p', { style: 'text-align:center' }, txt) : '');
+    sfx(passou ? 'ok' : 'erro');
+    botoes.append(h('button', { class: 'forte', onclick: () => { aoFim(passou); renderModal(); render(); } }, 'CONTINUAR'));
+  };
+  const rolar = () => {
+    grava(chave, mod.value);
+    const r = rola(), m = Number(mod.value) || 0, total = r.total + m;
+    const passou = cenario.rolagem.empatePassa ? total >= dv : total > dv;
+    concluir(passou, 'd10 [' + r.partes.join(' ') + '] ' + (m >= 0 ? '+ ' : '- ') + Math.abs(m) + ' = ' + total + ' contra ' + dv);
+  };
+  botoes.append(h('button', { class: 'forte', onclick: rolar }, 'ROLAR D10'), h('button', { onclick: () => concluir(true, 'Resultado da mesa') }, 'NA MESA: PASSEI'), h('button', { onclick: () => concluir(false, 'Resultado da mesa') }, 'NA MESA: FALHEI'));
+  return caixa(titulo, h('p', {}, nota), h('div', { class: 'campo' }, h('span', {}, 'Modificador (atributo + perícia)'), mod), saida, botoes);
+}
+function hashTexto(t) { let x = 2166136261; for (let i = 0; i < t.length; i++) { x ^= t.charCodeAt(i); x = Math.imul(x, 16777619) >>> 0; } return x; }
+function embaralha(texto, revelados, sem) {
+  const CH = '#%&@$*+=<>/\\|~?01';
+  const v = new Set(revelados), b = hashTexto(sem);
+  return [...texto].map((c, i) => (/\s/.test(c) || v.has(i) ? c : CH[((b ^ (i * 31)) >>> 0) % CH.length])).join('');
+}
+function telaConteudo(n) {
+  const s = pn(n.id), c = n.cripto;
+  const partes = [];
+  if (n.tipo === 'porta') {
+    const aberta = portaAberta(n), trancada = portaTrancada(n);
+    partes.push(h('div', { class: 'grande ' + (aberta ? 'ok' : trancada ? 'ruim' : 'alerta') }, aberta ? 'PORTA ABERTA' : trancada ? 'PORTA TRANCADA' : 'PORTA FECHADA'),
+      h('div', { class: 'acoes centro' }, h('button', { class: 'forte', disabled: trancada, onclick: () => { s.portaAberta = !aberta; sfx('ok'); commit(); renderModal(); render(); } }, aberta ? 'FECHAR PORTA' : 'ABRIR PORTA')));
+    if (!aberta) return caixa(n.nome, partes);
+  }
+  if (n.texto) {
+    const fechado = c.ativo && s.rodada < Number(c.rodadas);
+    partes.push(h('div', { class: 'leitura', style: 'margin-top:12px' }, fechado ? embaralha(n.texto, s.revelados, n.id) : n.texto));
+    if (fechado) {
+      if (c.contador) partes.push(h('div', { class: 'linha-meta', style: 'margin-top:10px' }, h('span', {}, 'Decriptação: camada ' + s.rodada + ' de ' + c.rodadas)));
+      if (s.status === 'travado') partes.push(h('p', { class: 'ruim' }, 'DECRIPTAÇÃO TRAVADA. Aguardando o operador.'));
+      else partes.push(h('div', { class: 'acoes' }, h('button', { class: 'forte', onclick: () => { tela(telaRolagem(n, 'DECRIPTAR', Number(c.dv), 'Cada sucesso revela uma camada do texto.', (passou) => {
+        if (passou) {
+          s.rodada++;
+          const pend = [...n.texto].map((ch, i) => (/\s/.test(ch) || s.revelados.includes(i) ? -1 : i)).filter((i) => i >= 0);
+          const qtd = s.rodada >= Number(c.rodadas) ? pend.length : Math.max(1, Math.floor(pend.length * (0.2 + 0.1 * s.rodada)));
+          for (let i = 0; i < qtd && pend.length; i++) s.revelados.push(pend.splice(Math.floor(Math.random() * pend.length), 1)[0]);
+        } else { s.criptoFalhas++; if (c.travaNaFalha) s.status = 'travado'; }
+        commit();
+      })); } }, 'TENTAR DECRIPTAR')));
+    }
+  }
+  return caixa(n.nome, partes);
+}
+
+const Jogos = {
+  breach(el, p, ctx) {
+    const buf = [], usados = new Set();
+    let porLinha = true, ativo = 0, fim = false;
+    const cod = (v) => h('span', { class: 'cod' + (v ? '' : ' vazio') }, v || '··');
+    const desenha = () => {
+      const feito = (s) => bufferContem(buf, s);
+      const grade = h('div', { class: 'g-breach', style: 'grid-template-columns:repeat(' + p.n + ',auto)' });
+      p.grade.forEach((lin, r) => lin.forEach((v, c) => {
+        const k = r + ',' + c, usado = usados.has(k), livre = !fim && !usado && (porLinha ? r === ativo : c === ativo);
+        grade.append(h('button', { class: (livre ? 'ativo' : '') + (usado ? ' usado' : ''), disabled: !livre, 'aria-label': 'Código ' + v + ' linha ' + (r + 1) + ' coluna ' + (c + 1), onclick: () => {
+          usados.add(k); buf.push(v); ctx.som('click');
+          ativo = porLinha ? c : r; porLinha = !porLinha;
+          if (p.daemons.every(feito)) { fim = true; desenha(); ctx.ok(); return; }
+          const preso = !p.grade.some((_, i) => !usados.has(porLinha ? ativo + ',' + i : i + ',' + ativo));
+          if (buf.length >= p.buffer || preso) { fim = true; desenha(); ctx.falha('BUFFER ESGOTADO'); return; }
+          desenha();
+        } }, v));
+      }));
+      el.replaceChildren(
+        h('div', { class: 'fila' }, h('span', {}, 'BUFFER'), Array.from({ length: p.buffer }, (_, i) => cod(buf[i]))),
+        h('p', { style: 'margin:6px 0' }, porLinha ? 'SELECIONE NA LINHA ' + (ativo + 1) : 'SELECIONE NA COLUNA ' + (ativo + 1)), grade,
+        p.daemons.map((s, i) => h('div', { class: 'fila' + (feito(s) ? ' feito' : '') }, h('span', {}, 'SEQ ' + (i + 1)), s.map((v) => cod(v)), feito(s) ? h('span', { class: 'ok' }, 'INJETADA') : null)));
+      if (fim && p.daemons.every(feito)) el.append(h('div', { class: 'grande ok' }, 'BREACH COMPLETO'));
+    };
+    desenha();
+  },
+  palavras(el, p, ctx) {
+    const log = h('div', { class: 'log painel', 'aria-live': 'polite' }, '> ENTRADA DE SENHA');
+    const escreve = (t) => { log.append(h('div', {}, '> ' + t)); log.scrollTop = log.scrollHeight; };
+    let encerrado = false;
+    const fichas = p.fluxo.map((f) => ({ ...f, vivo: true }));
+    const chars = [];
+    fichas.forEach((f, i) => { [...f.v].forEach((c) => chars.push({ c, i })); });
+    const spans = new Map();
+    const foco = (i, l) => (spans.get(i) || []).forEach((s) => s.classList.toggle('foco', l));
+    const desarma = (i) => { fichas[i].vivo = false; (spans.get(i) || []).forEach((s) => { s.textContent = '.'; s.classList.remove('foco'); s.classList.add('usado'); }); };
+    const usaPar = (i) => {
+      desarma(i);
+      const duds = fichas.map((f, k) => (f.t === 'w' && f.vivo && f.v !== p.alvo ? k : -1)).filter((k) => k >= 0);
+      if (duds.length && Math.random() < 0.6) { desarma(duds[Math.floor(Math.random() * duds.length)]); escreve('LIXO REMOVIDO'); }
+      else { ctx.repor(); escreve('TENTATIVA RECUPERADA'); }
+      ctx.som('click');
+    };
+    const tentar = (i) => {
+      const w = fichas[i].v;
+      escreve(w);
+      if (w === p.alvo) { encerrado = true; escreve('ACESSO LIBERADO'); ctx.ok(); return; }
+      escreve('NEGADO. ' + semelhanca(w, p.alvo) + '/' + p.alvo.length + ' CORRETAS');
+      desarma(i);
+      if (ctx.erro()) encerrado = true;
+    };
+    const dump = h('div', { class: 'dump' });
+    const base = 0xF3A0 + Math.floor(Math.random() * 0x400);
+    for (let col = 0; col < 2; col++) {
+      const coluna = h('div', {});
+      for (let l = 0; l < 14; l++) {
+        const linha = h('div', { class: 'l' }, h('span', { class: 'end' }, '0x' + (base + (col * 14 + l) * 12).toString(16).toUpperCase()));
+        chars.slice((col * 14 + l) * 12, (col * 14 + l + 1) * 12).forEach(({ c, i }) => {
+          const f = fichas[i];
+          if (f.t === 'g') { linha.append(c); return; }
+          const s = h('span', { class: 'tok', tabindex: '-1', onmouseenter: () => { if (f.vivo) foco(i, true); }, onmouseleave: () => foco(i, false),
+            onclick: () => { if (encerrado || !f.vivo) return; if (f.t === 'w') tentar(i); else usaPar(i); } }, c);
+          if (!spans.has(i)) spans.set(i, []);
+          spans.get(i).push(s);
+          linha.append(s);
+        });
+        coluna.append(linha);
+      }
+      dump.append(coluna);
+    }
+    dump.append(log);
+    el.replaceChildren(h('p', { style: 'margin:0 0 8px' }, 'Clique nas palavras. Blocos entre colchetes ajudam: ( ) [ ] { } < >'), dump);
+  },
+  circuito(el, p, ctx) {
+    let fim = false;
+    const desenho = (m, lit, papel) => {
+      const NS_SVG = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(NS_SVG, 'svg');
+      svg.setAttribute('viewBox', '0 0 100 100');
+      const cor = lit ? 'var(--ok)' : 'var(--t)';
+      const linha = (x, y) => { const l = document.createElementNS(NS_SVG, 'line'); [['x1', 50], ['y1', 50], ['x2', x], ['y2', y], ['stroke', cor], ['stroke-width', 12]].forEach(([a, b]) => l.setAttribute(a, b)); svg.append(l); };
+      if (m & 1) linha(50, 0); if (m & 2) linha(100, 50); if (m & 4) linha(50, 100); if (m & 8) linha(0, 50);
+      const c = document.createElementNS(NS_SVG, papel === 'fio' ? 'circle' : 'rect');
+      if (papel === 'fio') { c.setAttribute('cx', 50); c.setAttribute('cy', 50); c.setAttribute('r', 6); } else { [['x', 28], ['y', 28], ['width', 44], ['height', 44]].forEach(([a, b]) => c.setAttribute(a, b)); }
+      c.setAttribute('fill', papel === 'fonte' ? 'var(--p)' : papel === 'alvo' ? (lit ? 'var(--ok)' : 'var(--alerta)') : cor);
+      svg.append(c);
+      return svg;
+    };
+    const desenha = () => {
+      const vivos = ligados(p);
+      const grade = h('div', { class: 'g-circ', style: 'grid-template-columns:repeat(' + p.n + ',auto)' });
+      p.celulas.forEach((c, i) => {
+        const r = Math.floor(i / p.n), k = r + ',' + (i % p.n);
+        grade.append(h('button', { class: c.fixo ? 'fixo' : '', 'aria-label': c.papel === 'fonte' ? 'Fonte' : c.papel === 'alvo' ? 'Destino' : 'Peça linha ' + (r + 1) + ' coluna ' + (i % p.n + 1), disabled: fim, onclick: () => {
+          if (c.fixo || fim) return;
+          c.r = (c.r + 1) % 4; ctx.som('click');
+          if (circuitoFechado(p)) { fim = true; desenha(); ctx.ok(); return; }
+          desenha();
+        } }, desenho(giraMascara(c.m, c.r), vivos.has(k), c.papel)));
+      });
+      el.replaceChildren(h('p', { style: 'margin:0 0 6px' }, 'Clique nas peças para girar. Ligue a fonte a todos os destinos.'), grade, fim ? h('div', { class: 'grande ok' }, 'CIRCUITO FECHADO') : '');
+    };
+    desenha();
+  },
+  cripto(el, p, ctx) {
+    const pares = {}; [...p.frase].forEach((c, i) => { if (c !== ' ') pares[p.cifra[i]] = c; });
+    const certo = {};
+    p.dicas.forEach((c) => { const cif = Object.keys(pares).find((k) => pares[k] === c); certo[cif] = c; });
+    let sel = null, erros = 0, fim = false;
+    const desenha = () => {
+      const frase = h('div', { class: 'cifra' });
+      p.cifra.split(' ').forEach((pal) => {
+        frase.append(h('div', { class: 'pal' }, [...pal].map((c) => h('button', { class: sel === c ? 'sel' : '', disabled: fim || !!certo[c], 'aria-label': 'Letra cifrada ' + c, onclick: () => { sel = c; desenha(); } }, h('b', {}, certo[c] || ''), c))));
+      });
+      const abc = h('div', { class: 'alfabeto' }, [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((c) => h('button', { disabled: fim || !sel || Object.values(certo).includes(c), onclick: () => {
+        if (pares[sel] === c) {
+          certo[sel] = c; sel = null; ctx.som('click');
+          if (Object.keys(pares).every((k) => certo[k])) { fim = true; desenha(); ctx.ok(); return; }
+        } else {
+          erros++; ctx.som('erro');
+          if (erros >= p.erros) { fim = true; desenha(); ctx.falha('CIFRA REJEITADA'); return; }
+        }
+        desenha();
+      } }, c)));
+      el.replaceChildren(h('div', { class: 'linha-meta' }, h('span', {}, 'Erros: ' + erros + ' de ' + p.erros)), frase, sel ? h('p', {}, 'Qual letra real é ' + sel + '?') : h('p', {}, 'Escolha uma letra cifrada.'), abc,
+        fim && erros < p.erros ? h('div', { class: 'grande ok' }, 'CIFRA QUEBRADA') : '');
+    };
+    desenha();
+  },
+  memoria(el, p, ctx) {
+    let vistas = 0, tocando = false, pos = 0, fim = false;
+    const celulas = Array.from({ length: p.n * p.n }, (_, i) => h('button', { 'aria-label': 'Casa ' + (i + 1), disabled: true, onclick: () => {
+      if (tocando || fim || !vistas) return;
+      if (i === p.seq[pos]) {
+        ctx.som('click'); pos++;
+        celulas[i].classList.add('aceso'); setTimeout(() => celulas[i].classList.remove('aceso'), 140);
+        if (pos === p.seq.length) { fim = true; msg.textContent = 'PADRÃO CONFIRMADO'; msg.className = 'grande ok'; bloqueia(true); acoes.replaceChildren(); ctx.ok(); }
+      } else { fim = true; msg.textContent = 'PADRÃO INCORRETO'; msg.className = 'grande ruim'; bloqueia(true); acoes.replaceChildren(); ctx.falha('PADRÃO INCORRETO'); }
+    } }));
+    const bloqueia = (b) => celulas.forEach((c) => { c.disabled = b; });
+    const msg = h('p', {}, 'Veja a sequência e repita na mesma ordem.');
+    const acoes = h('div', { class: 'acoes centro' });
+    const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+    const tocar = async () => {
+      vistas++; tocando = true; pos = 0; bloqueia(true); desenhaAcoes();
+      await espera(300);
+      for (const i of p.seq) { celulas[i].classList.add('aceso'); ctx.som('click'); await espera(p.mostra); celulas[i].classList.remove('aceso'); await espera(p.pausa); }
+      tocando = false; bloqueia(false); desenhaAcoes();
+    };
+    const desenhaAcoes = () => {
+      const lim = ctx.replays, resta = lim > 0 ? lim + 1 - vistas : Infinity;
+      acoes.replaceChildren(h('button', { class: 'forte', disabled: tocando || resta <= 0, onclick: tocar }, vistas ? 'VER DE NOVO' + (lim > 0 ? ' (' + resta + ')' : '') : 'INICIAR SEQUÊNCIA'));
+    };
+    desenhaAcoes();
+    el.replaceChildren(msg, h('div', { class: 'g-mem', style: 'grid-template-columns:repeat(' + p.n + ',auto)' }, celulas), acoes);
+  }
+};
+
+function render() {
+  aplicaVisual();
+  const app = document.getElementById('app');
+  if (mestre) return renderMestre(app);
+  app.replaceChildren(telaJogador());
+}
+function telaJogador() {
+  const cols = [];
+  const coluna = (pai, nivel) => {
+    const lista = filhos(pai).filter(visivel);
+    if (!lista.length) return;
+    cols.push(h('div', { class: 'coluna' }, lista.map((n) => {
+      if (n.estrutura === 'titulo') return h('div', { class: 'titulo-col' }, n.nome);
+      const s = pn(n.id), sel = prog.aberto[nivel] === n.id;
+      const trava = protegido(n) && s.status === 'ativo';
+      const tag = s.status === 'quebrado' ? 'OFFLINE' : s.status === 'travado' ? 'TRAVADO' : trava ? 'SEGURO' : (protegido(n) ? 'ABERTO' : n.tipo === 'porta' ? 'PORTA' : '');
+      return h('button', { class: 'bloco' + (sel ? ' sel' : '') + (trava ? ' prot' : '') + (s.status === 'quebrado' ? ' quebrado' : ''), onclick: () => clicarNo(n, nivel) }, h('span', { class: 'nm' }, n.nome), tag ? h('span', { class: 'tag' }, tag) : null);
+    })));
+    const id = prog.aberto[nivel], n = id && noPorId(id);
+    if (n && n.pai === pai && acessivel(n)) coluna(n.id, nivel + 1);
+  };
+  coluna(null, 0);
+  const finais = { desligado: ['SEM ENERGIA', 'Conexão encerrada.', ''], corrompido: ['SISTEMA CORROMPIDO', 'Setor de boot destruído.', ''], explodido: ['SINAL PERDIDO', 'Falha catastrófica no hardware.', ' explosao'] };
+  const f = finais[prog.terminal];
+  return h('div', { class: 'tela' },
+    h('div', { class: 'topo' }, h('div', {}, h('h1', {}, cenario.titulo), cenario.subtitulo ? h('small', {}, cenario.subtitulo) : null), h('span', { class: 'esp' }), prog.contagem ? h('span', { class: 'relogio', id: 'relogio' }, formata(restoContagem())) : null),
+    h('div', { class: 'colunas' }, cols),
+    h('button', { class: 'acesso', title: 'Configuração', 'aria-label': 'Configuração', onclick: pedeSenha }, '⚙'),
+    f ? h('div', { class: 'fim-tela' + f[2] }, h('h2', {}, f[0]), h('p', {}, f[1])) : null);
+}
+const formata = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+const restoContagem = () => { const c = prog.contagem; return c ? (c.resto !== null ? c.resto : c.ate - Date.now()) : 0; };
+
+function pedeSenha() { abreModal({ tipo: 'senhaMestre' }); }
+function renderSenhaMestre() {
+  const entrada = h('input', { type: 'password', 'aria-label': 'Senha de configuração', autocomplete: 'off' });
+  const msg = h('p', { class: 'ruim', style: 'min-height:1.5em' });
+  const entra = () => {
+    if (sha256(SAL + entrada.value) === cenario.senhaHash) {
+      mestre = true; sessaoGrava(NS + '.mestre', '1'); modal = null;
+      document.getElementById('modal').replaceChildren(); render();
+    } else { msg.textContent = 'Senha incorreta.'; entrada.value = ''; entrada.focus(); }
+  };
+  entrada.addEventListener('keydown', (e) => { if (e.key === 'Enter') entra(); });
+  tela(caixa('Configuração', h('p', {}, 'Área do mestre. Digite a senha de configuração.'), entrada, msg, h('div', { class: 'acoes' }, h('button', { class: 'forte', onclick: entra }, 'ENTRAR'))));
+  setTimeout(() => entrada.focus(), 30);
+}
+function confirmar(txt, sim) {
+  confirmacao = true;
+  const fecha = () => { confirmacao = null; document.getElementById('modal').replaceChildren(); if (modal) renderModal(); };
+  tela(h('div', { class: 'caixa', role: 'alertdialog', 'aria-modal': 'true', style: 'width:min(460px,100%)' }, h('div', { class: 'corpo' }, h('p', {}, txt),
+    h('div', { class: 'acoes' }, h('button', { class: 'risco', onclick: () => { fecha(); sim(); } }, 'CONFIRMAR'), h('button', { onclick: fecha }, 'CANCELAR')))));
+}
+function campo(rotulo, el, nota, todo) {
+  if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', rotulo);
+  return h('div', { class: 'campo' + (todo ? ' todo' : '') }, h('span', {}, rotulo), el, nota ? h('small', {}, nota) : null);
+}
+const entradaTexto = (obj, k, aoMudar, attrs) => h('input', { type: 'text', value: obj[k] ?? '', oninput: (e) => { obj[k] = e.target.value; salvaCenario(); if (aoMudar) aoMudar(); }, ...attrs });
+const entradaNum = (obj, k, attrs) => h('input', { type: 'number', min: 0, value: obj[k], oninput: (e) => { obj[k] = e.target.value === '' ? 0 : Number(e.target.value); salvaCenario(); }, ...attrs });
+const areaTexto = (obj, k) => h('textarea', { oninput: (e) => { obj[k] = e.target.value; salvaCenario(); } }, obj[k] || '');
+const selecao = (obj, k, ops, reabre) => h('select', { onchange: (e) => { obj[k] = e.target.value; salvaCenario(); if (reabre) render(); } }, Object.entries(ops).map(([v, t]) => h('option', { value: v, selected: String(obj[k]) === v }, t)));
+const marca = (obj, k, txt, reabre) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: obj[k], onchange: (e) => { obj[k] = e.target.checked; salvaCenario(); if (reabre) render(); } }), txt);
+const opcoesMacro = () => Object.fromEntries([['', 'Nenhuma'], ...cenario.macros.map((m) => [m.id, m.rotulo])]);
+
+function renderMestre(app) {
+  const ABAS = { construir: 'Construir', geral: 'Geral', macros: 'Macros', vivo: 'Ao vivo', publicar: 'Publicar' };
+  const topo = h('div', { class: 'topo' }, h('div', {}, h('h1', {}, 'Configuração'), h('small', {}, cenario.titulo)), h('span', { class: 'esp' }),
+    h('div', { class: 'm-abas', role: 'tablist' }, Object.entries(ABAS).map(([k, t]) => h('button', { class: aba === k ? 'sel' : '', role: 'tab', 'aria-selected': aba === k ? 'true' : 'false', onclick: () => { aba = k; render(); } }, t))),
+    h('button', { onclick: () => { mestre = false; aba = 'construir'; sessaoGrava(NS + '.mestre', null); render(); } }, 'Sair para modo jogador'));
+  const miolo = { construir: abaConstruir, geral: abaGeral, macros: abaMacros, vivo: abaVivo, publicar: abaPublicar }[aba]();
+  app.replaceChildren(h('div', { class: 'tela' }, topo, miolo));
+}
+function abaConstruir() {
+  if (!noPorId(selId)) selId = cenario.nos[0] ? cenario.nos[0].id : null;
+  const arvore = [];
+  const ramo = (pai, nivel) => filhos(pai).forEach((n) => {
+    const tag = n.estrutura === 'titulo' ? 'título' : n.protecao.tipo === 'hack' ? (NOMES_PUZZLE[n.protecao.puzzle] || 'hack').split(' ')[0] : n.protecao.tipo === 'nenhuma' ? (n.tipo === 'porta' ? 'porta' : '') : n.protecao.tipo;
+    arvore.push(h('button', { class: 'no-arv' + (selId === n.id ? ' sel' : ''), style: 'padding-left:' + (7 + nivel * 16) + 'px', onclick: () => { selId = n.id; render(); } }, h('span', { class: 'nm', id: 'arv-' + n.id }, n.nome), tag ? h('span', { class: 'tag' }, tag) : null));
+    ramo(n.id, nivel + 1);
+  });
+  ramo(null, 0);
+  const sel = noPorId(selId);
+  const adiciona = (pai) => { const n = noPadrao({ pai }); cenario.nos.push(n); selId = n.id; salvaCenario(); render(); };
+  return h('div', { class: 'm-corpo' },
+    h('div', { class: 'painel' }, h('h3', {}, 'Caminho do hack'),
+      h('div', { class: 'acoes', style: 'margin:0 0 10px' }, h('button', { class: 'forte', onclick: () => adiciona(sel ? sel.pai : null) }, '+ Nó'), h('button', { disabled: !sel, onclick: () => adiciona(sel.id) }, '+ Filho')),
+      arvore.length ? arvore : h('p', {}, 'Nenhum nó ainda. Crie o primeiro.')),
+    h('div', { class: 'painel' }, sel ? formNo(sel) : h('p', {}, 'Selecione ou crie um nó.')));
+}
+function descendentes(id) { return filhos(id).flatMap((n) => [n.id, ...descendentes(n.id)]); }
+function moveNo(n, dir) {
+  const irmaos = filhos(n.pai), i = irmaos.indexOf(n), o = irmaos[i + dir];
+  if (!o) return;
+  const a = cenario.nos.indexOf(n), b = cenario.nos.indexOf(o);
+  [cenario.nos[a], cenario.nos[b]] = [cenario.nos[b], cenario.nos[a]];
+  salvaCenario(); render();
+}
+function duplicaNo(n) {
+  const mapa = {};
+  const copia = (x, pai) => {
+    const c = JSON.parse(JSON.stringify(x)); c.id = uid(); c.pai = pai; mapa[x.id] = c.id;
+    const pos = cenario.nos.length; cenario.nos.splice(pos, 0, c);
+    filhos(x.id).filter((f) => !Object.values(mapa).includes(f.id)).forEach((f) => copia(f, c.id));
+    return c;
+  };
+  const c = copia(n, n.pai); c.nome += ' (cópia)'; selId = c.id; salvaCenario(); render();
+}
+function excluiNo(n) {
+  const ids = [n.id, ...descendentes(n.id)];
+  confirmar('Excluir "' + n.nome + '"' + (ids.length > 1 ? ' e mais ' + (ids.length - 1) + ' nó(s) abaixo dele' : '') + '?', () => {
+    cenario.nos = cenario.nos.filter((x) => !ids.includes(x.id)); selId = null; salvaCenario(); render();
+  });
+}
+function formNo(n) {
+  const proibidos = new Set([n.id, ...descendentes(n.id)]);
+  const pais = Object.fromEntries([['', '(raiz)'], ...cenario.nos.filter((x) => !proibidos.has(x.id) && x.estrutura !== 'titulo').map((x) => [x.id, x.nome])]);
+  const paiSel = h('select', { onchange: (e) => { n.pai = e.target.value || null; salvaCenario(); render(); } }, Object.entries(pais).map(([v, t]) => h('option', { value: v, selected: (n.pai || '') === v }, t)));
+  const blocos = [
+    h('div', { class: 'acoes', style: 'margin:0 0 12px' }, h('button', { onclick: () => moveNo(n, -1) }, 'Subir'), h('button', { onclick: () => moveNo(n, 1) }, 'Descer'), h('button', { onclick: () => duplicaNo(n) }, 'Duplicar'), h('button', { class: 'risco', onclick: () => excluiNo(n) }, 'Excluir')),
+    h('div', { class: 'campos' },
+      campo('Nome', entradaTexto(n, 'nome', () => { const e = document.getElementById('arv-' + n.id); if (e) e.textContent = n.nome; })),
+      campo('Fica dentro de', paiSel),
+      campo('Estrutura', selecao(n, 'estrutura', { normal: 'Nó clicável', titulo: 'Título de seção' }, true)))
+  ];
+  if (n.estrutura === 'titulo') return blocos;
+  blocos.push(h('div', { class: 'campos', style: 'margin-top:10px' },
+    campo('Conteúdo', selecao(n, 'tipo', { texto: 'Texto', porta: 'Porta', nenhum: 'Sem conteúdo (só abre filhos)' }, true)),
+    campo('Macro ao abrir', selecao(n, 'macro', opcoesMacro())),
+    h('div', { class: 'campo' }, h('span', {}, 'Visibilidade'), marca(n, 'oculto', 'Começa oculto (o mestre revela)'))));
+  if (n.tipo !== 'nenhum') blocos.push(campo(n.tipo === 'porta' ? 'Texto atrás da porta' : 'Texto', areaTexto(n, 'texto'), null, true));
+  if (n.tipo === 'porta') blocos.push(h('fieldset', {}, h('legend', {}, 'Porta'), h('div', { class: 'acoes', style: 'margin:0' }, marca(n.porta, 'aberta', 'Começa aberta'), marca(n.porta, 'trancada', 'Começa trancada'))));
+  if (n.tipo === 'texto') {
+    blocos.push(h('fieldset', {}, h('legend', {}, 'Texto criptografado'), marca(n.cripto, 'ativo', 'Mostrar embaralhado até decriptar', true),
+      n.cripto.ativo ? h('div', { class: 'campos', style: 'margin-top:10px' }, campo('Dificuldade do teste (DV)', entradaNum(n.cripto, 'dv')), campo('Camadas', entradaNum(n.cripto, 'rodadas', { min: 1 })), h('div', { class: 'campo' }, marca(n.cripto, 'contador', 'Mostrar progresso'), marca(n.cripto, 'travaNaFalha', 'Falha trava o nó'))) : null));
+  }
+  blocos.push(formProtecao(n));
+  return blocos;
+}
+function formProtecao(n) {
+  const p = n.protecao;
+  const f = h('fieldset', {}, h('legend', {}, 'Proteção'), h('div', { class: 'campos' }, campo('Tipo', selecao(p, 'tipo', { nenhuma: 'Nenhuma', senha: 'Senha', teclado: 'Teclado numérico', hack: 'Minigame de hack' }, true))));
+  if (p.tipo === 'nenhuma') return f;
+  const c = [];
+  if (p.tipo === 'senha') c.push(campo('Senha', entradaTexto(p, 'codigo')));
+  if (p.tipo === 'teclado') c.push(campo('Código (1 a 5 dígitos)', entradaTexto(p, 'codigo', null, { inputmode: 'numeric', maxlength: 5 })));
+  if (p.tipo === 'hack') {
+    c.push(campo('Minigame', selecao(p, 'puzzle', NOMES_PUZZLE, true)), campo('Dificuldade', selecao(p, 'dificuldade', NOMES_DIF)), campo('Tempo limite (segundos)', entradaNum(p, 'tempo'), '0 = sem limite'));
+    if (p.puzzle === 'palavras') c.push(campo('Senha a descobrir', entradaTexto(p, 'alvo'), 'Opcional. De 4 a 10 letras; vazio sorteia.'));
+    if (p.puzzle === 'cripto') c.push(campo('Frase secreta', entradaTexto(p, 'alvo'), 'Opcional. Vazio sorteia uma frase.'));
+    if (p.puzzle === 'memoria') c.push(campo('Repetições da sequência', entradaNum(p, 'replays'), '0 = sem limite'));
+  }
+  c.push(campo('Máximo de erros', entradaNum(p, 'maxTentativas'), '0 = sem limite'), campo('Se esgotar os erros', selecao(p, 'naFalha', NOMES_CONSEQ, true)));
+  if (p.tipo === 'hack') c.push(campo('Se o tempo acabar', selecao(p, 'noTempo', NOMES_CONSEQ, true)));
+  if (p.naFalha === 'travarTempo' || p.noTempo === 'travarTempo') c.push(campo('Tempo de trava (segundos)', entradaNum(p, 'travaSeg')));
+  c.push(campo('Macro na falha', selecao(p, 'macroFalha', opcoesMacro())), campo('Macro no sucesso', selecao(p, 'macroSucesso', opcoesMacro())));
+  f.append(h('div', { class: 'campos', style: 'margin-top:10px' }, c));
+  if (p.tipo === 'hack') f.append(campo('Texto de introdução', areaTexto(p, 'intro'), null, true));
+  f.append(h('div', { class: 'campos', style: 'margin-top:10px' },
+    h('div', { class: 'campo' }, marca(p.force, 'ativo', 'Permitir forçar acesso', true), p.force.ativo ? campo('DV para forçar', entradaNum(p.force, 'dv')) : null),
+    p.tipo === 'hack' ? h('div', { class: 'campo' }, marca(p.teste, 'ativo', 'Teste de perícia antes do jogo', true), p.teste.ativo ? campo('DV do teste', entradaNum(p.teste, 'dv')) : null) : null));
+  if (p.tipo === 'hack') f.append(h('div', { class: 'acoes' }, h('button', { onclick: () => abreModal({ tipo: 'teste', puzzle: gerar(p.puzzle, p.dificuldade, p.alvo), replays: Number(p.replays), nome: n.nome }) }, 'Testar este puzzle')));
+  return f;
+}
+function renderTeste() {
+  const area = h('div', {}), m = modal;
+  tela(caixa('Teste: ' + m.nome, h('div', { class: 'linha-meta' }, h('span', { class: 'alerta' }, 'Resposta: ' + m.puzzle.resposta), h('span', {}, 'Não altera o progresso dos jogadores')), area,
+    h('div', { class: 'acoes' }, h('button', { onclick: () => { m.puzzle = null; const no = noPorId(selId); m.puzzle = gerar(no.protecao.puzzle, no.protecao.dificuldade, no.protecao.alvo); renderTeste(); } }, 'Gerar outro'))));
+  const copia = JSON.parse(JSON.stringify(m.puzzle));
+  Jogos[copia.tipo](area, copia, { replays: m.replays, restantes: () => Infinity, ok: () => toast('Teste: vitória.'), falha: (t) => toast('Teste: ' + t), erro: () => false, repor: () => {}, som: () => {} });
+}
+function abaGeral() {
+  const b = cenario.boot;
+  const linhas = h('textarea', { oninput: (e) => { b.linhas = e.target.value.split('\n').filter((l) => l.trim()); salvaCenario(); } }, b.linhas.join('\n'));
+  const nova = h('input', { type: 'password', 'aria-label': 'Nova senha', autocomplete: 'new-password' });
+  const troca = () => {
+    if (nova.value.length < 4) return toast('A senha precisa de ao menos 4 caracteres.');
+    cenario.senhaHash = sha256(SAL + nova.value); nova.value = ''; salvaCenario(); toast('Senha alterada.');
+  };
+  return h('div', { class: 'm-corpo um' }, h('div', { class: 'painel pilha' },
+    h('h3', {}, 'Identidade'),
+    h('div', { class: 'campos' }, campo('Título', entradaTexto(cenario, 'titulo')), campo('Subtítulo', entradaTexto(cenario, 'subtitulo')),
+      campo('Tema', selecao(cenario, 'tema', Object.fromEntries(Object.entries(TEMAS).map(([k, v]) => [k, v.nome])), true)),
+      campo('CRT', selecao(cenario, 'crt', { off: 'Desligado', leve: 'Leve', pesado: 'Pesado' })), campo('Degradação de sinal', selecao(cenario, 'sinal', { off: 'Desligada', leve: 'Leve', pesado: 'Pesada' })),
+      h('div', { class: 'campo' }, marca(cenario, 'sons', 'Sons ligados'))),
+    h('h3', {}, 'Sequência de boot'),
+    h('div', { class: 'campos' }, h('div', { class: 'campo' }, marca(b, 'ativo', 'Mostrar boot ao abrir'), marca(b, 'barra', 'Barra de progresso')), campo('Frequência', selecao(b, 'frequencia', { sessao: 'Uma vez por sessão do navegador', sempre: 'Sempre ao abrir' })), campo('Linhas', linhas, null, true)),
+    h('h3', {}, 'Rolagens'),
+    h('div', { class: 'campos' }, h('div', { class: 'campo' }, marca(cenario.rolagem, 'criticos', '10 e 1 no d10 rolam mais um dado'), marca(cenario.rolagem, 'empatePassa', 'Empate com o DV passa'))),
+    h('h3', {}, 'Senha de configuração'),
+    h('div', { class: 'campos' }, campo('Nova senha', nova), h('div', { class: 'campo', style: 'align-content:end' }, h('button', { onclick: troca }, 'Trocar senha')))));
+}
+function abaMacros() {
+  const add = () => { cenario.macros.push(macroPadrao()); salvaCenario(); render(); };
+  const ATM = { '': 'Sem mudança', normal: 'Normal', aviso: 'Aviso', critico: 'Crítico' };
+  const INT = { '': 'Sem mudança', off: 'Desligado', leve: 'Leve', pesado: 'Pesado' };
+  return h('div', { class: 'm-corpo um' }, h('div', { class: 'painel' }, h('h3', {}, 'Macros'), h('p', {}, 'Efeitos prontos para disparar ao vivo ou por falha e sucesso de um nó.'),
+    h('div', { class: 'acoes', style: 'margin-bottom:12px' }, h('button', { class: 'forte', onclick: add }, '+ Macro')),
+    cenario.macros.map((m) => h('fieldset', {}, h('legend', {}, m.rotulo), h('div', { class: 'campos' },
+      campo('Nome', entradaTexto(m, 'rotulo')), campo('Atmosfera', selecao(m, 'atmos', ATM)), campo('Sinal', selecao(m, 'sinal', INT)), campo('CRT', selecao(m, 'crt', INT)),
+      campo('Glitch (ms)', entradaNum(m, 'glitchMs')), campo('Som', selecao(m, 'som', { '': 'Nenhum', alarme: 'Alarme', erro: 'Erro', ok: 'Sucesso', trava: 'Trava', boot: 'Boot' })), campo('Aviso na tela', entradaTexto(m, 'aviso'), null, true),
+      h('div', { class: 'campo' }, marca(m.contagem, 'ativa', 'Inicia contagem regressiva', true)), m.contagem.ativa ? campo('Segundos', entradaNum(m.contagem, 'seg')) : null, m.contagem.ativa ? campo('Ao zerar', selecao(m.contagem, 'final', NOMES_FINAL)) : null),
+    h('div', { class: 'acoes' }, h('button', { onclick: () => { aplicaMacro(m); commit(); toast('Macro disparada na tela dos jogadores.'); } }, 'Disparar agora'), h('button', { class: 'risco', onclick: () => confirmar('Excluir a macro "' + m.rotulo + '"?', () => { cenario.macros = cenario.macros.filter((x) => x !== m); salvaCenario(); render(); }) }, 'Excluir'))))));
+}
+function respostaDe(n) {
+  const p = n.protecao, s = pn(n.id);
+  if (p.tipo === 'senha' || p.tipo === 'teclado') return 'Código: ' + (p.codigo || '(vazio)');
+  if (p.tipo !== 'hack') return n.cripto.ativo ? 'Criptografado: camada ' + s.rodada + ' de ' + n.cripto.rodadas : '';
+  return s.puzzle ? s.puzzle.resposta : 'Puzzle ainda não gerado';
+}
+function abaVivo() {
+  const atos = (rot, fn, cl) => h('button', { class: cl, onclick: () => { fn(); commit(); render(); } }, rot);
+  const seg = h('input', { type: 'number', min: 1, value: 120, 'aria-label': 'Segundos' });
+  const fim = h('select', { 'aria-label': 'Ao zerar' }, Object.entries(NOMES_FINAL).map(([k, v]) => h('option', { value: k }, v)));
+  const msg = h('input', { type: 'text', 'aria-label': 'Aviso', placeholder: 'Mensagem para a tela' });
+  const envia = (t) => { prog.aviso = { seq: prog.aviso.seq + 1, txt: t }; ultimoAviso = prog.aviso.seq; commit(); };
+  const c = prog.contagem;
+  const esquerda = h('div', { class: 'pilha' },
+    h('div', { class: 'painel' }, h('h3', {}, 'Atmosfera'), h('div', { class: 'acoes', style: 'margin:0' }, atos('Normal', () => { prog.atmos = 'normal'; }), atos('Aviso', () => { prog.atmos = 'aviso'; }), atos('Crítico', () => { prog.atmos = 'critico'; }), atos('Glitch', () => { prog.glitchAte = Date.now() + 900; }), atos('Limpar efeitos', () => { prog.atmos = null; prog.sinal = null; prog.crt = null; }))),
+    h('div', { class: 'painel' }, h('h3', {}, 'Macros'), cenario.macros.length ? h('div', { class: 'acoes', style: 'margin:0' }, cenario.macros.map((m) => atos(m.rotulo, () => aplicaMacro(m)))) : h('p', {}, 'Nenhuma macro criada.')),
+    h('div', { class: 'painel' }, h('h3', {}, 'Contagem regressiva'),
+      c ? h('p', { class: 'relogio', id: 'relogio' }, formata(restoContagem())) : null,
+      h('div', { class: 'campos' }, campo('Segundos', seg), campo('Ao zerar', fim)),
+      h('div', { class: 'acoes' }, atos('Iniciar', () => iniciaContagem(Number(seg.value) || 60, fim.value)), c ? atos(c.resto !== null ? 'Continuar' : 'Pausar', () => { if (c.resto !== null) { c.ate = Date.now() + c.resto; c.resto = null; } else c.resto = c.ate - Date.now(); }) : null, c ? atos('Parar', () => { prog.contagem = null; }) : null)),
+    h('div', { class: 'painel' }, h('h3', {}, 'Aviso na tela'), msg, h('div', { class: 'acoes' }, h('button', { onclick: () => { if (msg.value) { envia(msg.value); msg.value = ''; } } }, 'Enviar'))),
+    h('div', { class: 'painel' }, h('h3', {}, 'Terminal: ' + prog.terminal), h('div', { class: 'acoes', style: 'margin:0' }, atos('Religar', () => { prog.terminal = 'ok'; }), atos('Desligar', () => { prog.terminal = 'desligado'; }, 'risco'), atos('Explodir', () => { prog.terminal = 'explodido'; }, 'risco'))));
+  const lista = h('div', { class: 'painel' }, h('h3', {}, 'Nós'), h('p', {}, 'Jogadores em: ' + (prog.aberto.map((i) => (noPorId(i) || {}).nome).filter(Boolean).join(' > ') || 'início')),
+    cenario.nos.filter((n) => n.estrutura !== 'titulo').map((n) => {
+      const s = pn(n.id);
+      const p = protegido(n);
+      return h('div', { class: 'vivo-no' },
+        h('div', { class: 'cab' }, h('b', {}, n.nome), h('span', { class: 'pill ' + s.status }, NOMES_STATUS[s.status]), p ? h('small', {}, 'Erros: ' + s.tentativas + (Number(n.protecao.maxTentativas) > 0 ? '/' + n.protecao.maxTentativas : '')) : null, visivel(n) ? null : h('small', { class: 'alerta' }, 'oculto')),
+        respostaDe(n) ? h('div', { class: 'resp' }, respostaDe(n)) : null,
+        h('div', { class: 'btns' },
+          p ? atos('Liberar', () => { s.status = 'ativo'; resolver(n); }) : null,
+          p ? h('button', { onclick: () => { reseta(n, false); render(); } }, 'Resetar') : null,
+          n.protecao.tipo === 'hack' ? h('button', { onclick: () => { reseta(n, true); render(); } }, 'Novo puzzle') : null,
+          atos('Travar', () => { s.status = 'travado'; s.travadoAte = null; }),
+          atos('Quebrar', () => { s.status = 'quebrado'; }, 'risco'),
+          n.cripto.ativo ? atos('Decriptar', () => { s.rodada = Number(n.cripto.rodadas); }) : null,
+          atos(visivel(n) ? 'Ocultar' : 'Revelar', () => { s.visivel = !visivel(n); }),
+          p && respostaDe(n) ? h('button', { onclick: () => envia('DICA: ' + respostaDe(n)) }, 'Enviar resposta')  : null));
+    }));
+  return h('div', { class: 'm-corpo' }, esquerda, lista);
+}
+const baixa = (nome, conteudo, tipo) => {
+  const u = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
+  const a = h('a', { href: u, download: nome }); document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 2000);
+};
+const slug = () => (Puzzles.normalizaTexto(cenario.titulo).toLowerCase().trim().replace(/\s+/g, '-') || 'terminal').slice(0, 40);
+function exportaJogadores() {
+  const dados = ofusca(JSON.stringify({ exportId: Date.now().toString(36), cenario }));
+  const html = FONTE.replace(/(<script id="dados" type="text\/plain">)[\s\S]*?(<\/script>)/, (_, a, b) => a + dados + b);
+  baixa(slug() + '-jogadores.html', html, 'text/html');
+  toast('Arquivo dos jogadores gerado.');
+}
+async function mostraLink(saida) {
+  try {
+    const link = await gerarLink(cenario);
+    const campoLink = h('input', { type: 'text', readonly: true, value: link, 'aria-label': 'Link para jogadores', onclick: (e) => e.target.select() });
+    saida.replaceChildren(campoLink, h('small', {}, link.length + ' caracteres. ' + (link.length > 2000 ? 'Discord corta mensagens acima de 2.000: envie por outro canal ou use o arquivo exportado.' : 'Gere um novo link depois de qualquer edição.')));
+    try { await navigator.clipboard.writeText(link); toast('Link copiado.'); } catch { campoLink.select(); toast('Link gerado. Copie do campo.'); }
+  } catch { toast('Este navegador não consegue gerar o link. Use o arquivo exportado.'); }
+}
+function abaPublicar() {
+  const saidaLink = h('div', { class: 'campo' });
+  const arquivo =h('input', { type: 'file', accept: '.json,application/json', 'aria-label': 'Arquivo de cenário', onchange: (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    f.text().then((t) => {
+      const c = normalizar(JSON.parse(t));
+      confirmar('Substituir o cenário atual por "' + c.titulo + '"? O cenário atual será perdido se não tiver sido exportado.', () => {
+        cenario = c; selId = null; salvaCenario(); render(); toast('Cenário importado.');
+      });
+    }).catch((err) => toast('Arquivo inválido: ' + err.message));
+  } });
+  return h('div', { class: 'm-corpo um' }, h('div', { class: 'painel pilha' },
+    h('h3', {}, 'Liberar para os jogadores'),
+    h('p', {}, 'O link leva o cenário inteiro. Quem abrir entra no modo jogador, e o mestre pode abrir o mesmo link em outro aparelho, digitar a senha e continuar editando. Troque a senha inicial antes de gerar o link.'),
+    h('div', { class: 'acoes', style: 'margin:0' }, h('button', { class: 'forte', onclick: () => mostraLink(saidaLink) }, 'Copiar link para jogadores'), h('button', { onclick: exportaJogadores }, 'Exportar arquivo HTML')),
+    saidaLink,
+    h('h3', {}, 'Cópia do cenário'),
+    h('div', { class: 'acoes', style: 'margin:0' }, h('button', { onclick: () => baixa(slug() + '.json', JSON.stringify(cenario, null, 2), 'application/json') }, 'Exportar cenário (.json)')),
+    campo('Importar cenário', arquivo),
+    h('h3', {}, 'Sessão'),
+    h('div', { class: 'acoes', style: 'margin:0' },
+      h('button', { class: 'risco', onclick: () => confirmar('Apagar todo o progresso dos jogadores? O cenário não muda.', () => { const s = prog.som.seq, a = prog.aviso.seq, v = prog.v; prog = novoProgresso(); prog.v = v; prog.som.seq = s; prog.aviso.seq = a; commit(); render(); toast('Progresso apagado.'); }) }, 'Resetar progresso'),
+      h('button', { class: 'risco', onclick: () => confirmar('Trocar o cenário atual pelo exemplo?', () => { const hash = cenario.senhaHash; cenario = cenarioExemplo(); cenario.senhaHash = hash; selId = null; salvaCenario(); render(); }) }, 'Carregar exemplo'))));
+}
+
+function tique() {
+  const agora = Date.now();
+  const r = document.documentElement;
+  const glitch = prog.glitchAte > agora ? '1' : '0';
+  if (r.dataset.glitch !== glitch) r.dataset.glitch = glitch;
+  let mudou = false;
+  for (const [id, s] of Object.entries(prog.nos)) {
+    const n = noPorId(id);
+    if (!n) continue;
+    if (s.status === 'travado' && s.travadoAte && agora >= s.travadoAte) { s.status = 'ativo'; s.travadoAte = null; s.tentativas = 0; mudou = true; }
+    if (s.status === 'ativo' && s.prazoAte && agora >= s.prazoAte) {
+      dispara(n.protecao.macroFalha);
+      consequencia(n, n.protecao.noTempo);
+      mudou = true;
+      if (modal && modal.id === id) { modal.jogo = false; modal.etapa = 'intro'; }
+    }
+  }
+  const c = prog.contagem;
+  if (c && c.resto === null && c.ate <= agora) {
+    const m = { desligar: 'desligado', corromper: 'corrompido', explodir: 'explodido' };
+    if (m[c.final]) prog.terminal = m[c.final];
+    prog.contagem = null; mudou = true;
+  }
+  if (mudou) { commit(); if (!mestre || aba === 'vivo') render(); if (modal) renderModal(); }
+  const rel = document.getElementById('relogio');
+  if (rel && prog.contagem) { const resto = restoContagem(); rel.textContent = formata(resto); r.dataset.urgente = resto < 30000 ? '1' : '0'; } else r.dataset.urgente = '0';
+  if (modal && modal.id) {
+    const s = pn(modal.id), n = noPorId(modal.id);
+    const tr = document.getElementById('trava-resto');
+    if (tr && s.travadoAte) tr.textContent = formata(s.travadoAte - agora);
+    const bar = document.getElementById('prazo-barra'), txt = document.getElementById('prazo-txt');
+    if (n && s.prazoAte && bar) { const t = (s.prazoAte - agora) / 1000; bar.style.width = Math.max(0, t / Number(n.protecao.tempo) * 100) + '%'; if (txt) txt.textContent = formata(t * 1000); }
+  }
+}
+function mostraBoot() {
+  const b = cenario.boot, chave = NS + '.boot';
+  if (mestre || !b.ativo || !b.linhas.length || (b.frequencia === 'sessao' && sessaoLer(chave))) return;
+  sessaoGrava(chave, '1');
+  const lista = h('div', {}), barra = h('i', { style: 'width:0' });
+  const el = h('div', { class: 'boot' }, lista, b.barra ? h('div', { class: 'barra' }, barra) : null);
+  let i = 0, fim = false;
+  const encerra = () => { if (!fim) { fim = true; el.remove(); } };
+  el.addEventListener('click', encerra);
+  document.body.append(el);
+  sfx('boot');
+  const passo = () => {
+    if (fim) return;
+    if (i >= b.linhas.length) { setTimeout(encerra, 450); return; }
+    lista.append(h('div', {}, '> ' + b.linhas[i])); i++;
+    barra.style.width = (i / b.linhas.length * 100) + '%';
+    setTimeout(passo, 420);
+  };
+  passo();
+}
+function telaErro(err) {
+  document.getElementById('app').replaceChildren(h('div', { class: 'erro-carga' }, h('h2', {}, 'Não foi possível carregar o cenário'), h('p', {}, err.message),
+    h('button', { onclick: () => { remove(NS + '.cenario'); remove(NS + '.prog'); history.replaceState(null, '', location.pathname); location.reload(); } }, 'Descartar e abrir o terminal padrão')));
+}
+async function inicia() {
+  window.addEventListener('hashchange', () => location.reload());
+  try { await carregar(); } catch (e) { telaErro(e); return; }
+  mestre = sessaoLer(NS + '.mestre') === '1';
+  try { canal = new BroadcastChannel(NS); canal.onmessage = recebe; } catch { canal = null; }
+  window.addEventListener('storage', (e) => { if (e.key === NS + '.prog' || e.key === NS + '.cenario') recebe(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'm' && !mestre) { e.preventDefault(); pedeSenha(); }
+    if (e.key === 'Escape' && modal && !confirmacao) fechaModal();
+  });
+  render(); mostraBoot();
+  setInterval(tique, 250);
+}
+inicia();
+</script>
+</body>
+</html>
