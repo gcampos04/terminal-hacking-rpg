@@ -719,7 +719,8 @@ function aplicaRele(msg, silencioso) {
       if (k === 'som' && !SONS[msg.g.som.nome]) continue;
       prog[k] = { ...msg.g[k], seq: prog[k].seq + 1 };
       if (silencioso) { if (k === 'som') ultimoSom = prog.som.seq; else ultimoAviso = prog.aviso.seq; }
-    } else prog[k] = msg.g[k];
+    } else if (k === 'contagem' && silencioso && msg.g.contagem && msg.g.contagem.resto === null && msg.g.contagem.ate <= Date.now()) prog.contagem = null;
+    else prog[k] = msg.g[k];
   }
   efeitosRemotos(); commit(); render(); atualizaModal();
 }
@@ -731,7 +732,7 @@ async function buscaUltimoRele() {
   } catch { /* sem mensagem anterior */ }
 }
 function conectaRele() {
-  if (releFonte || mestre || !cenario.sala || !window.EventSource) return;
+  if (releFonte || mestre || !embutido || !cenario.sala || !window.EventSource) return;
   releFonte = new EventSource(RELE + '/' + cenario.sala + '/sse');
   releFonte.onopen = buscaUltimoRele;
   releFonte.onmessage = (e) => { try { const d = JSON.parse(e.data); if (d.event === 'message') aplicaRele(JSON.parse(d.message)); } catch { /* mensagem inválida */ } };

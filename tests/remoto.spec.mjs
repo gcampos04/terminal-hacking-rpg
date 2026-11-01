@@ -127,6 +127,41 @@ test.describe('controle à distância', () => {
     await expect(atmos(j)).toHaveAttribute('data-atmos', 'normal');
     await j.context().close();
   });
+  const publica = (page, sala, g, k = Object.keys(g)) => page.request.post('/rele/' + sala, { data: JSON.stringify({ t: Date.now(), k, g }) });
+  const ESTADO = { atmos: null, sinal: null, crt: null, glitchAte: 0, glitchMs: null, contagem: null, terminal: 'ok', som: { seq: 0, nome: '' }, aviso: { seq: 0, txt: '' } };
+  test('contagem vencida de um ensaio não derruba quem abre o link depois', async ({ page }) => {
+    await mestre(page, NOS, { macros: MACROS });
+    const link = await geraLink(page);
+    const sala = await page.evaluate(() => cenario.sala);
+    await publica(page, sala, { ...ESTADO, atmos: 'critico', contagem: { ate: Date.now() - 60000, resto: null, final: 'desligar' } });
+    const j = await jogadorRemoto(page, link);
+    await expect(atmos(j)).toHaveAttribute('data-atmos', 'critico');
+    await assentar(j);
+    await assentar(j);
+    await expect(j.getByText('SEM ENERGIA')).toHaveCount(0);
+    expect(await j.evaluate(() => prog.contagem)).toBeNull();
+    await j.context().close();
+  });
+  test('contagem em andamento continua para quem entra depois', async ({ page }) => {
+    await mestre(page, NOS, { macros: MACROS });
+    const link = await geraLink(page);
+    const sala = await page.evaluate(() => cenario.sala);
+    await publica(page, sala, { ...ESTADO, contagem: { ate: Date.now() + 120000, resto: null, final: 'desligar' } });
+    const j = await jogadorRemoto(page, link);
+    await expect(j.locator('#relogio')).toBeVisible();
+    await j.context().close();
+  });
+  test('o site sem link não obedece à sala, mesmo com mensagem guardada', async ({ page }) => {
+    await mestre(page, NOS, { macros: MACROS });
+    await geraLink(page);
+    const sala = await page.evaluate(() => cenario.sala);
+    await publica(page, sala, { ...ESTADO, terminal: 'desligado' });
+    await botao(page, 'Sair para modo jogador').click();
+    await assentar(page);
+    await page.reload();
+    await assentar(page);
+    await expect(page.getByText('SEM ENERGIA')).toHaveCount(0);
+  });
   test('a sala continua a mesma ao gerar um novo link', async ({ page }) => {
     await mestre(page, NOS, { macros: MACROS });
     await geraLink(page);
