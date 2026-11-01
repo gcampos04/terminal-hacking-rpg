@@ -179,6 +179,23 @@ test.describe('painel ao vivo', () => {
     await page.mouse.wheel(0, 5000);
     await expect(botao(page, 'Carregar exemplo')).toBeInViewport();
   });
+  for (const [nome, abre] of [['engrenagem', (p) => p.getByRole('button', { name: 'Configuração', exact: true }).click()], ['atalho', (p) => p.keyboard.press('Control+Shift+M')]]) {
+    test('mestre entra pela ' + nome + ' com o terminal desligado e religa', async ({ page }) => {
+      await semear(page, CENARIO);
+      await page.evaluate(() => localStorage.setItem('nt.base.prog', JSON.stringify({ ...prog, terminal: 'desligado' })));
+      await page.reload();
+      await expect(page.getByText('SEM ENERGIA')).toBeVisible();
+      await abre(page);
+      await campo(page, 'Senha de configuração').fill(SENHA);
+      await botao(page, 'ENTRAR').click();
+      await aba(page, 'Ao vivo');
+      await botao(page, 'Religar').click();
+      await botao(page, 'Sair para modo jogador').click();
+      await expect(page.getByText('SEM ENERGIA')).toHaveCount(0);
+      await page.reload();
+      await expect(page.getByText('SEM ENERGIA')).toHaveCount(0);
+    });
+  }
   test('contagem: iniciar, pausar, continuar, parar', async ({ page, context }) => {
     const j = await duasJanelas(page, context);
     await page.getByRole('spinbutton', { name: 'Segundos' }).fill('120');

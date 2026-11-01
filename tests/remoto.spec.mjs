@@ -106,6 +106,27 @@ test.describe('controle à distância', () => {
     await assentar(page);
     expect(envios).toEqual([]);
   });
+  test('religar alcança o jogador cujo terminal desligou só no aparelho dele', async ({ page }) => {
+    await mestre(page, NOS, { macros: MACROS });
+    const j = await jogadorRemoto(page, await geraLink(page));
+    await painel(page);
+    await j.evaluate(() => { prog.terminal = 'desligado'; commit(); render(); });
+    await expect(j.getByText('SEM ENERGIA')).toBeVisible();
+    await botao(page, 'Religar').click();
+    await expect(j.getByText('SEM ENERGIA')).toHaveCount(0);
+    await j.context().close();
+  });
+  test('resetar progresso limpa os efeitos do jogador à distância', async ({ page }) => {
+    await mestre(page, NOS, { macros: MACROS });
+    const j = await jogadorRemoto(page, await geraLink(page));
+    await j.evaluate(() => { prog.terminal = 'desligado'; prog.atmos = 'critico'; commit(); render(); });
+    await aba(page, 'Publicar');
+    await botao(page, 'Resetar progresso').click();
+    await botao(page, 'CONFIRMAR').click();
+    await expect(j.getByText('SEM ENERGIA')).toHaveCount(0);
+    await expect(atmos(j)).toHaveAttribute('data-atmos', 'normal');
+    await j.context().close();
+  });
   test('a sala continua a mesma ao gerar um novo link', async ({ page }) => {
     await mestre(page, NOS, { macros: MACROS });
     await geraLink(page);

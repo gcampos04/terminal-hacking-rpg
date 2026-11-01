@@ -55,6 +55,7 @@ html[data-urgente="1"] .relogio{color:var(--perigo);animation:pisca .6s infinite
 .titulo-col{font-size:12px;letter-spacing:.14em;opacity:.7;text-transform:uppercase;padding:8px 2px 2px;border-bottom:1px dashed var(--b)}
 .acesso{position:fixed;right:5px;bottom:3px;z-index:60;background:none;border:0;opacity:.28;padding:6px;font-size:13px}
 #modal:empty{display:none}
+#modal:has(.caixa[aria-label="Configuração"]){z-index:50}
 #modal{position:fixed;inset:0;background:#000000b8;display:flex;align-items:center;justify-content:center;padding:14px;z-index:40}
 .caixa{background:var(--f);border:1px solid var(--p);width:min(760px,100%);max-height:100%;display:flex;flex-direction:column;box-shadow:0 0 34px #0009}
 .caixa>header{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--b);background:var(--s)}
@@ -1661,7 +1662,7 @@ function abaVivo() {
       h('div', { class: 'campos' }, campo('Segundos', seg), campo('Ao zerar', fim)),
       h('div', { class: 'acoes' }, atos('Iniciar', () => iniciaContagem(Number(seg.value) || 60, fim.value)), c ? atos(c.resto !== null ? 'Continuar' : 'Pausar', () => { if (c.resto !== null) { c.ate = Date.now() + c.resto; c.resto = null; } else c.resto = c.ate - Date.now(); }) : null, c ? atos('Parar', () => { prog.contagem = null; }) : null)),
     h('div', { class: 'painel' }, h('h3', {}, 'Aviso na tela'), msg, h('div', { class: 'acoes' }, h('button', { onclick: () => { if (msg.value) { envia(msg.value); msg.value = ''; vivoForm.msg = ''; } } }, 'Enviar'))),
-    h('div', { class: 'painel' }, h('h3', {}, 'Terminal: ' + prog.terminal), h('div', { class: 'acoes', style: 'margin:0' }, atos('Religar', () => { prog.terminal = 'ok'; }), atos('Desligar', () => { prog.terminal = 'desligado'; }, 'risco'), atos('Corromper', () => { prog.terminal = 'corrompido'; }, 'risco'), atos('Explodir', () => { prog.terminal = 'explodido'; }, 'risco'))));
+    h('div', { class: 'painel' }, h('h3', {}, 'Terminal: ' + prog.terminal), h('div', { class: 'acoes', style: 'margin:0' }, ...[['Religar', 'ok'], ['Desligar', 'desligado', 'risco'], ['Corromper', 'corrompido', 'risco'], ['Explodir', 'explodido', 'risco']].map(([rot, estado, cl]) => atos(rot, () => { prog.terminal = estado; releChaves.add('terminal'); }, cl)))));
   const lista = h('div', { class: 'painel' }, h('h3', {}, 'Nós'), h('p', {}, 'Jogadores em: ' + (prog.aberto.map((i) => (noPorId(i) || {}).nome).filter(Boolean).join(' > ') || 'início')),
     cenario.nos.filter((n) => n.estrutura !== 'titulo').map((n) => {
       const s = pn(n.id);
@@ -1729,7 +1730,7 @@ function abaPublicar() {
     campo('Importar cenário', arquivo),
     h('h3', {}, 'Sessão'),
     h('div', { class: 'acoes', style: 'margin:0' },
-      h('button', { class: 'risco', onclick: () => confirmar('Apagar todo o progresso dos jogadores? O cenário não muda.', () => { const s = prog.som.seq, a = prog.aviso.seq, v = prog.v; prog = novoProgresso(); prog.v = v; prog.som.seq = s; prog.aviso.seq = a; commit(); render(); toast('Progresso apagado.'); }) }, 'Resetar progresso'),
+      h('button', { class: 'risco', onclick: () => confirmar('Apagar todo o progresso dos jogadores? O cenário não muda.', () => { const s = prog.som.seq, a = prog.aviso.seq, v = prog.v; prog = novoProgresso(); prog.v = v; prog.som.seq = s; prog.aviso.seq = a; ['atmos', 'sinal', 'crt', 'contagem', 'terminal'].forEach((k) => releChaves.add(k)); commit(); render(); toast('Progresso apagado.'); }) }, 'Resetar progresso'),
       h('button', { class: 'risco', onclick: () => confirmar('Trocar o cenário atual pelo exemplo?', () => { const hash = cenario.senhaHash; cenario = normalizar(cenarioExemplo()); cenario.senhaHash = hash; selId = null; salvaCenario(); render(); }) }, 'Carregar exemplo'))));
 }
 
