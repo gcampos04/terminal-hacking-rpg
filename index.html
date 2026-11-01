@@ -392,11 +392,13 @@ const NOMES_PUZZLE = { breach: 'Quebra de Protocolo', palavras: 'Matriz de Palav
 const NOMES_DIF = { facil: 'Fácil', normal: 'Normal', dificil: 'Difícil', expert: 'Expert' };
 const NOMES_CONSEQ = { travar: 'Travar até o mestre liberar', travarTempo: 'Travar por um tempo', quebrar: 'Quebrar para sempre', novo: 'Gerar outro puzzle (sem travar)' };
 const NOMES_FINAL = { desligar: 'Desligar', corromper: 'Corromper', explodir: 'Explodir', nada: 'Nada (só zera)' };
+const ROTULOS_SOM = { alarme: 'Alarme', sirene: 'Sirene', aviso: 'Aviso', glitch: 'Glitch', estatica: 'Estática', estabiliza: 'Estabilizar', acesso: 'Acesso liberado', erro: 'Erro', trava: 'Trava', portaAbre: 'Porta abrindo', portaFecha: 'Porta fechando', desliga: 'Desligar', vidro: 'Vidro quebrando', explosao: 'Explosão', boot: 'Boot' };
 const NOMES_STATUS = { ativo: 'ATIVO', resolvido: 'LIBERADO', travado: 'TRAVADO', quebrado: 'QUEBRADO' };
 
 let cenario, prog, embutido = null, NS = 'nt.base';
 let mestre = false, aba = 'construir', selId = null, modal = null, confirmacao = null;
-let canal = null, audio = null, salvaTimer = null, ultimoSom = 0, ultimoAviso = 0;
+let canal = null, audio = null, saida = null, ambiente = null, salvaTimer = null, ultimoSom = 0, ultimoAviso = 0;
+let focoSom = null, audioLiberado = false, mudo = false, ultimoForte = 0, estadoSom = null, marcaContagem = null, marcaPrazo = null;
 
 const h = (tag, attrs, ...filhos) => {
   const el = document.createElement(tag);
@@ -519,7 +521,7 @@ function normalizar(c) {
     while (p !== null) { if (vistos.has(p)) throw new Error('Há um ciclo na árvore de nós em "' + x.nome + '".'); vistos.add(p); p = nos.find((y) => y.id === p).pai; }
   });
   return {
-    versao: 1, titulo: String(c.titulo ?? 'TERMINAL'), subtitulo: String(c.subtitulo ?? ''), tema: TEMAS[c.tema] ? c.tema : 'neon', crt: c.crt || 'leve', sinal: c.sinal || 'off', sons: c.sons !== false,
+    versao: 1, titulo: String(c.titulo ?? 'TERMINAL'), subtitulo: String(c.subtitulo ?? ''), tema: TEMAS[c.tema] ? c.tema : 'neon', crt: c.crt || 'leve', sinal: c.sinal || 'off', sons: c.sons !== false, volume: Number.isFinite(c.volume) ? c.volume : 70, ambiente: ['off', 'servidor', 'chuva'].includes(c.ambiente) ? c.ambiente : 'servidor',
     boot: Object.assign({ ativo: true, linhas: ['INICIANDO...', 'PRONTO'], barra: true, frequencia: 'sessao' }, c.boot),
     rolagem: Object.assign({ criticos: true, empatePassa: false }, c.rolagem), senhaHash: typeof c.senhaHash === 'string' ? c.senhaHash : HASH_INICIAL,
     macros: (Array.isArray(c.macros) ? c.macros : []).map(macroPadrao), nos
@@ -594,28 +596,122 @@ function recebe() {
 }
 function efeitosRemotos() {
   if (prog.som.seq > ultimoSom) { ultimoSom = prog.som.seq; if (!mestre) sfx(prog.som.nome); }
-  if (prog.aviso.seq > ultimoAviso) { ultimoAviso = prog.aviso.seq; if (!mestre) toast(prog.aviso.txt); }
+  if (prog.aviso.seq > ultimoAviso) { ultimoAviso = prog.aviso.seq; if (!mestre) { toast(prog.aviso.txt); if (Date.now() - ultimoForte > 600) sfx('aviso'); } }
 }
 
-function sfx(nome) {
-  if (mestre || !cenario.sons || !nome) return;
+const GANHO_EFEITOS = 2.4, GANHO_AMBIENTE = 0.3;
+const volumeSaida = () => (mudo ? 0 : cenario.volume / 100);
+function ligaAudio() {
+  if (!audio) {
+    audio = new (window.AudioContext || window.webkitAudioContext)();
+    saida = audio.createGain();
+    saida.gain.value = volumeSaida();
+    saida.connect(audio.createDynamicsCompressor()).connect(audio.destination);
+  }
+  if (audio.state === 'suspended') audio.resume();
+  return audio;
+}
+function tom(f, ini, dur, op = {}) {
+  const { tipo = 'square', vol = 0.1, ate = null, ataque = 0.004 } = op;
+  const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + ini;
+  o.type = tipo; o.frequency.setValueAtTime(f, t);
+  if (ate) o.frequency.exponentialRampToValueAtTime(ate, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol * GANHO_EFEITOS, t + ataque); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(saida); o.start(t); o.stop(t + dur + 0.02);
+}
+function bufferRuido(seg) {
+  const b = audio.createBuffer(1, Math.ceil(audio.sampleRate * seg), audio.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return b;
+}
+function ruido(ini, dur, op = {}) {
+  const { filtro = 'bandpass', freq = 1800, ate = null, q = 0.7, vol = 0.2, ataque = 0.005 } = op;
+  const s = audio.createBufferSource(), f = audio.createBiquadFilter(), g = audio.createGain(), t = audio.currentTime + ini;
+  s.buffer = bufferRuido(dur + 0.02); f.type = filtro; f.Q.value = q; f.frequency.setValueAtTime(freq, t);
+  if (ate) f.frequency.exponentialRampToValueAtTime(ate, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol * GANHO_EFEITOS, t + ataque); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f).connect(g).connect(saida); s.start(t); s.stop(t + dur + 0.02);
+}
+const SONS = {
+  hover: () => tom(2400, 0, 0.018, { tipo: 'sine', vol: 0.025 }),
+  click: () => { tom(1200, 0, 0.035, { vol: 0.07 }); ruido(0, 0.02, { freq: 4000, vol: 0.05 }); },
+  nav: () => { tom(620, 0, 0.05, { vol: 0.08 }); tom(930, 0.045, 0.07, { vol: 0.07 }); },
+  abrir: () => tom(340, 0, 0.11, { tipo: 'triangle', ate: 1020, vol: 0.13 }),
+  fechar: () => tom(760, 0, 0.1, { tipo: 'triangle', ate: 260, vol: 0.1 }),
+  tecla: (d) => { const n = Number(d) || 0; tom(697 + (n % 4) * 77, 0, 0.07, { tipo: 'sine', vol: 0.12 }); tom(1209 + (n % 3) * 127, 0, 0.07, { tipo: 'sine', vol: 0.09 }); },
+  seleciona: () => { tom(1480, 0, 0.04, { vol: 0.07 }); ruido(0, 0.03, { freq: 2600, vol: 0.05 }); },
+  gira: () => { ruido(0, 0.04, { freq: 900, q: 2, vol: 0.22 }); tom(190, 0, 0.05, { vol: 0.06 }); },
+  nota: (i) => tom([262, 294, 330, 392, 440, 523, 587, 659, 784, 880, 988, 1047][(Number(i) || 0) % 12], 0, 0.22, { tipo: 'triangle', vol: 0.16 }),
+  ok: () => { tom(660, 0, 0.09, { vol: 0.09 }); tom(990, 0.09, 0.15, { vol: 0.09 }); },
+  acesso: () => [523, 659, 784, 1047].forEach((f, i) => tom(f, i * 0.075, 0.2, { tipo: 'square', vol: 0.08 })),
+  erro: () => { tom(196, 0, 0.14, { tipo: 'sawtooth', vol: 0.14 }); tom(147, 0.13, 0.22, { tipo: 'sawtooth', vol: 0.14 }); },
+  trava: () => { ruido(0, 0.06, { freq: 700, q: 3, vol: 0.3 }); tom(150, 0.03, 0.14, { tipo: 'sawtooth', vol: 0.14 }); tom(75, 0.16, 0.34, { tipo: 'sawtooth', vol: 0.16 }); },
+  dado: () => { for (let i = 0; i < 6; i++) ruido(i * 0.05 + Math.random() * 0.02, 0.03, { freq: 1800 + Math.random() * 1800, q: 4, vol: 0.24 }); },
+  dados: () => { for (let i = 0; i < 10; i++) tom(700 + Math.random() * 1500, i * 0.042, 0.03, { vol: 0.05 }); },
+  portaAbre: () => { ruido(0, 0.6, { freq: 500, ate: 3000, vol: 0.2, ataque: 0.1 }); tom(70, 0, 0.5, { tipo: 'sawtooth', ate: 130, vol: 0.09, ataque: 0.05 }); ruido(0.58, 0.06, { freq: 500, q: 2, vol: 0.24 }); },
+  portaFecha: () => { ruido(0, 0.45, { freq: 2600, ate: 400, vol: 0.2, ataque: 0.05 }); ruido(0.43, 0.09, { filtro: 'lowpass', freq: 380, vol: 0.5 }); },
+  aviso: () => { tom(880, 0, 0.09, { tipo: 'sine', vol: 0.15 }); tom(1320, 0.1, 0.13, { tipo: 'sine', vol: 0.14 }); },
+  alarme: () => [0, 0.34, 0.68].forEach((t) => { tom(780, t, 0.15, { tipo: 'sawtooth', vol: 0.14 }); tom(560, t + 0.17, 0.15, { tipo: 'sawtooth', vol: 0.14 }); }),
+  sirene: () => [0, 0.62, 1.24].forEach((t) => tom(240, t, 0.56, { tipo: 'sawtooth', ate: 520, vol: 0.16, ataque: 0.04 })),
+  glitch: (ms) => { const fim = Math.min(1.5, (Number(ms) || 500) / 1000); for (let t = 0; t < fim; t += 0.055 + Math.random() * 0.05) { ruido(t, 0.035 + Math.random() * 0.05, { freq: 500 + Math.random() * 5000, q: 6, vol: 0.2 }); if (Math.random() < 0.45) tom(90 + Math.random() * 1700, t, 0.04, { vol: 0.05 }); } },
+  estatica: () => ruido(0, 1.6, { filtro: 'highpass', freq: 500, vol: 0.09, ataque: 0.08 }),
+  estabiliza: () => tom(540, 0, 1, { tipo: 'sine', ate: 270, vol: 0.14, ataque: 0.05 }),
+  tic: () => tom(1040, 0, 0.04, { vol: 0.08 }),
+  ticFinal: (p) => tom(1040 + (Number(p) || 0) * 40, 0, 0.06, { vol: 0.12 }),
+  zerou: () => [0, 0.2, 0.4, 0.6].forEach((t) => tom(1320, t, 0.14, { vol: 0.16 })),
+  desliga: () => { tom(880, 0, 1.3, { tipo: 'sawtooth', ate: 38, vol: 0.13 }); ruido(1.2, 0.05, { freq: 1300, q: 3, vol: 0.2 }); },
+  vidro: () => { ruido(0, 0.08, { filtro: 'highpass', freq: 2200, vol: 0.2 }); for (let i = 0; i < 14; i++) tom(2200 + Math.random() * 4800, 0.04 + Math.random() * 0.75, 0.1, { tipo: 'sine', vol: 0.05 }); },
+  explosao: () => { ruido(0, 1.9, { filtro: 'lowpass', freq: 1700, ate: 70, vol: 0.4, ataque: 0.01 }); tom(95, 0, 1.3, { tipo: 'sine', ate: 26, vol: 0.22 }); ruido(0.03, 0.45, { filtro: 'highpass', freq: 1400, vol: 0.14 }); },
+  boot: () => { tom(55, 0, 0.95, { tipo: 'sawtooth', ate: 165, vol: 0.09, ataque: 0.15 }); [440, 660, 880].forEach((f, i) => tom(f, 0.65 + i * 0.1, 0.16, { tipo: 'sine', vol: 0.1 })); },
+  linha: () => tom(1500 + Math.random() * 500, 0, 0.022, { vol: 0.045 })
+};
+const FORTES = new Set(['alarme', 'sirene', 'explosao', 'vidro', 'desliga', 'estabiliza', 'aviso']);
+function sfx(nome, arg, forcar) {
+  if (!nome || !SONS[nome] || !cenario.sons || (!forcar && (mestre || !audioLiberado))) return;
   try {
-    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-    if (audio.state === 'suspended') audio.resume();
-    const nota = (f, ini, dur, tipo = 'square', vol = 0.035) => {
-      const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + ini;
-      o.type = tipo; o.frequency.value = f; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      o.connect(g).connect(audio.destination); o.start(t); o.stop(t + dur);
-    };
-    ({
-      click: () => nota(880, 0, 0.04),
-      ok: () => { nota(660, 0, 0.09); nota(990, 0.09, 0.14); },
-      erro: () => { nota(170, 0, 0.18, 'sawtooth'); },
-      trava: () => { nota(240, 0, 0.14, 'sawtooth'); nota(120, 0.14, 0.3, 'sawtooth'); },
-      alarme: () => { [0, 0.3, 0.6].forEach((t) => { nota(740, t, 0.14, 'sawtooth', 0.05); nota(520, t + 0.15, 0.14, 'sawtooth', 0.05); }); },
-      boot: () => { nota(220, 0, 0.1); nota(330, 0.1, 0.1); nota(440, 0.2, 0.18); }
-    }[nome] || (() => {}))();
+    ligaAudio();
+    if (FORTES.has(nome)) ultimoForte = Date.now();
+    SONS[nome](arg);
   } catch { /* áudio indisponível */ }
+}
+function paraAmbiente() {
+  if (!ambiente) return;
+  const a = ambiente; ambiente = null;
+  a.ganho.gain.setTargetAtTime(0.0001, audio.currentTime, 0.2);
+  setTimeout(() => a.nos.forEach((n) => { try { n.stop(); } catch { /* já parado */ } }), 900);
+}
+function tocaAmbiente(tipo) {
+  ligaAudio();
+  const ganho = audio.createGain(), nos = [];
+  ganho.gain.value = 0.0001; ganho.connect(saida);
+  const chiado = (filtro, freq, vol) => {
+    const s = audio.createBufferSource(), f = audio.createBiquadFilter(), g = audio.createGain();
+    s.buffer = bufferRuido(3); s.loop = true; f.type = filtro; f.frequency.value = freq; g.gain.value = vol;
+    s.connect(f).connect(g).connect(ganho); s.start(); nos.push(s);
+  };
+  if (tipo === 'chuva') { chiado('highpass', 900, 0.1); chiado('lowpass', 420, 0.13); } else {
+    const f = audio.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 190; f.connect(ganho);
+    [55, 55.6, 110.4].forEach((hz) => { const o = audio.createOscillator(), g = audio.createGain(); o.type = 'sawtooth'; o.frequency.value = hz; g.gain.value = 0.1; o.connect(g).connect(f); o.start(); nos.push(o); });
+    chiado('bandpass', 1500, 0.014);
+  }
+  ganho.gain.setTargetAtTime(GANHO_AMBIENTE, audio.currentTime, 0.6);
+  ambiente = { tipo, ganho, nos };
+}
+function atualizaAmbiente() {
+  if (audio && saida) saida.gain.setTargetAtTime(volumeSaida(), audio.currentTime, 0.02);
+  const quero = !mestre && audioLiberado && cenario.sons && prog.terminal === 'ok' ? cenario.ambiente : 'off';
+  if ((ambiente ? ambiente.tipo : 'off') === quero) return;
+  paraAmbiente();
+  if (quero !== 'off') tocaAmbiente(quero);
+}
+function sonsDeEstado() {
+  const a = prog.atmos || 'normal', s = prog.sinal || cenario.sinal, t = prog.terminal;
+  const antes = estadoSom; estadoSom = { a, s, t };
+  if (!antes) return;
+  if (t !== antes.t) sfx({ desligado: 'desliga', corrompido: 'vidro', explodido: 'explosao', ok: 'boot' }[t]);
+  const silencio = Date.now() - ultimoForte < 600;
+  if (a !== antes.a && !silencio) sfx({ aviso: 'aviso', critico: 'sirene', normal: 'estabiliza' }[a]);
+  if (s === 'pesado' && antes.s !== 'pesado') sfx('estatica');
 }
 function toast(txt) {
   let c = document.querySelector('.toasts');
@@ -631,6 +727,7 @@ function aplicaVisual() {
   r.dataset.sinal = prog.sinal || cenario.sinal;
   r.dataset.mestre = mestre ? '1' : '0';
   document.title = mestre ? 'Configuração — ' + cenario.titulo : cenario.titulo;
+  sonsDeEstado(); atualizaAmbiente();
 }
 
 const noPorId = (id) => cenario.nos.find((n) => n.id === id);
@@ -659,9 +756,9 @@ function aplicaMacro(m) {
   if (m.atmos) prog.atmos = m.atmos;
   if (m.sinal) prog.sinal = m.sinal;
   if (m.crt) prog.crt = m.crt;
-  if (m.glitchMs > 0) prog.glitchAte = Date.now() + Number(m.glitchMs);
+  if (m.glitchMs > 0) { prog.glitchAte = Date.now() + Number(m.glitchMs); prog.glitchMs = Number(m.glitchMs); }
   if (m.som) { prog.som = { seq: prog.som.seq + 1, nome: m.som }; ultimoSom = prog.som.seq; sfx(m.som); }
-  if (m.aviso) { prog.aviso = { seq: prog.aviso.seq + 1, txt: m.aviso }; ultimoAviso = prog.aviso.seq; if (!mestre) toast(m.aviso); }
+  if (m.aviso) { prog.aviso = { seq: prog.aviso.seq + 1, txt: m.aviso }; ultimoAviso = prog.aviso.seq; if (!mestre) { toast(m.aviso); if (!m.som) sfx('aviso'); } }
   if (m.contagem.ativa && !prog.contagem) iniciaContagem(Number(m.contagem.seg), m.contagem.final);
 }
 function iniciaContagem(seg, final) { prog.contagem = { ate: Date.now() + seg * 1000, resto: null, final }; }
@@ -669,7 +766,7 @@ function resolver(n) {
   const s = pn(n.id);
   s.status = 'resolvido'; s.prazoAte = null; s.travadoAte = null;
   if (n.tipo === 'porta') s.portaTrancada = false;
-  dispara(n.protecao.macroSucesso); sfx('ok');
+  dispara(n.protecao.macroSucesso); sfx('acesso');
   commit();
 }
 function consequencia(n, qual) {
@@ -699,7 +796,7 @@ function reseta(n, novoPuzzle) {
 
 function clicarNo(n, nivel) {
   if (n.estrutura === 'titulo') return;
-  sfx('click');
+  sfx('nav');
   prog.aberto = prog.aberto.slice(0, nivel).concat(n.id);
   commit();
   const s = pn(n.id);
@@ -709,8 +806,8 @@ function clicarNo(n, nivel) {
   render();
 }
 const temConteudo = (n) => n.tipo === 'porta' || (n.tipo === 'texto' && !!n.texto);
-function abreModal(m) { modal = m; m.rev = m.id ? pn(m.id).rev : 0; renderModal(); }
-function fechaModal() { modal = null; document.getElementById('modal').replaceChildren(); render(); }
+function abreModal(m) { sfx('abrir'); modal = m; m.rev = m.id ? pn(m.id).rev : 0; renderModal(); }
+function fechaModal() { sfx('fechar'); modal = null; document.getElementById('modal').replaceChildren(); render(); }
 function caixa(titulo, ...conteudo) {
   return h('div', { class: 'caixa', role: 'dialog', 'aria-modal': 'true', 'aria-label': titulo },
     h('header', {}, h('h2', {}, titulo), h('button', { 'aria-label': 'Fechar', onclick: fechaModal }, 'X')),
@@ -795,9 +892,9 @@ function telaTeclado(n) {
   };
   const meta = h('span', {}, metaTentativas(n));
   const tecla = (t, fn) => h('button', { onclick: fn }, t);
-  const teclas = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => tecla(d, () => { if (dig.length < 5) { dig += d; atualiza(); sfx('click'); } }));
+  const teclas = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => tecla(d, () => { if (dig.length < 5) { dig += d; atualiza(); sfx('tecla', d); } }));
   return caixa(n.nome, h('div', { class: 'linha-meta' }, meta), visor, msg,
-    h('div', { class: 'teclado' }, teclas, tecla('C', () => { dig = ''; atualiza(); }), tecla('0', () => { if (dig.length < 5) { dig += '0'; atualiza(); sfx('click'); } }), h('button', { class: 'forte', onclick: envia }, 'OK')),
+    h('div', { class: 'teclado' }, teclas, tecla('C', () => { dig = ''; atualiza(); }), tecla('0', () => { if (dig.length < 5) { dig += '0'; atualiza(); sfx('tecla', '0'); } }), h('button', { class: 'forte', onclick: envia }, 'OK')),
     h('div', { class: 'acoes centro' }, botaoForca(n)));
 }
 function telaIntroHack(n) {
@@ -862,7 +959,7 @@ function telaRolagem(n, titulo, dv, nota, aoFim) {
     botoes.append(h('button', { class: 'forte', onclick: () => { aoFim(passou); renderModal(); render(); } }, 'CONTINUAR'));
   };
   const rolar = () => {
-    grava(chave, mod.value);
+    grava(chave, mod.value); sfx('dado');
     const r = rola(), m = Number(mod.value) || 0, total = r.total + m;
     const passou = cenario.rolagem.empatePassa ? total >= dv : total > dv;
     concluir(passou, 'd10 [' + r.partes.join(' ') + '] ' + (m >= 0 ? '+ ' : '- ') + Math.abs(m) + ' = ' + total + ' contra ' + dv);
@@ -882,7 +979,7 @@ function telaConteudo(n) {
   if (n.tipo === 'porta') {
     const aberta = portaAberta(n), trancada = portaTrancada(n);
     partes.push(h('div', { class: 'grande ' + (aberta ? 'ok' : trancada ? 'ruim' : 'alerta') }, aberta ? 'PORTA ABERTA' : trancada ? 'PORTA TRANCADA' : 'PORTA FECHADA'),
-      h('div', { class: 'acoes centro' }, h('button', { class: 'forte', disabled: trancada, onclick: () => { s.portaAberta = !aberta; sfx('ok'); commit(); renderModal(); render(); } }, aberta ? 'FECHAR PORTA' : 'ABRIR PORTA')));
+      h('div', { class: 'acoes centro' }, h('button', { class: 'forte', disabled: trancada, onclick: () => { s.portaAberta = !aberta; sfx(aberta ? 'portaFecha' : 'portaAbre'); commit(); renderModal(); render(); } }, aberta ? 'FECHAR PORTA' : 'ABRIR PORTA')));
     if (!aberta) return caixa(n.nome, partes);
   }
   if (n.texto) {
@@ -893,7 +990,7 @@ function telaConteudo(n) {
       if (s.status === 'travado') partes.push(h('p', { class: 'ruim' }, 'DECRIPTAÇÃO TRAVADA. Aguardando o operador.'));
       else partes.push(h('div', { class: 'acoes' }, h('button', { class: 'forte', onclick: () => { tela(telaRolagem(n, 'DECRIPTAR', Number(c.dv), 'Cada sucesso revela uma camada do texto.', (passou) => {
         if (passou) {
-          s.rodada++;
+          s.rodada++; sfx('dados');
           const pend = [...n.texto].map((ch, i) => (/\s/.test(ch) || s.revelados.includes(i) ? -1 : i)).filter((i) => i >= 0);
           const qtd = s.rodada >= Number(c.rodadas) ? pend.length : Math.max(1, Math.floor(pend.length * (0.2 + 0.1 * s.rodada)));
           for (let i = 0; i < qtd && pend.length; i++) s.revelados.push(pend.splice(Math.floor(Math.random() * pend.length), 1)[0]);
@@ -916,7 +1013,7 @@ const Jogos = {
       p.grade.forEach((lin, r) => lin.forEach((v, c) => {
         const k = r + ',' + c, usado = usados.has(k), livre = !fim && !usado && (porLinha ? r === ativo : c === ativo);
         grade.append(h('button', { class: (livre ? 'ativo' : '') + (usado ? ' usado' : ''), disabled: !livre, 'aria-label': 'Código ' + v + ' linha ' + (r + 1) + ' coluna ' + (c + 1), onclick: () => {
-          usados.add(k); buf.push(v); ctx.som('click');
+          usados.add(k); buf.push(v); ctx.som('seleciona');
           ativo = porLinha ? c : r; porLinha = !porLinha;
           if (p.daemons.every(feito)) { fim = true; desenha(); ctx.ok(); return; }
           const preso = !p.grade.some((_, i) => !usados.has(porLinha ? ativo + ',' + i : i + ',' + ativo));
@@ -947,7 +1044,7 @@ const Jogos = {
       const duds = fichas.map((f, k) => (f.t === 'w' && f.vivo && f.v !== p.alvo ? k : -1)).filter((k) => k >= 0);
       if (duds.length && Math.random() < 0.6) { desarma(duds[Math.floor(Math.random() * duds.length)]); escreve('LIXO REMOVIDO'); }
       else { ctx.repor(); escreve('TENTATIVA RECUPERADA'); }
-      ctx.som('click');
+      ctx.som('dados');
     };
     const tentar = (i) => {
       const w = fichas[i].v;
@@ -966,7 +1063,7 @@ const Jogos = {
         chars.slice((col * 14 + l) * 12, (col * 14 + l + 1) * 12).forEach(({ c, i }) => {
           const f = fichas[i];
           if (f.t === 'g') { linha.append(c); return; }
-          const s = h('span', { class: 'tok', tabindex: '-1', onmouseenter: () => { if (f.vivo) foco(i, true); }, onmouseleave: () => foco(i, false),
+          const s = h('span', { class: 'tok', tabindex: '-1', onmouseenter: () => { if (f.vivo) { foco(i, true); ctx.som('hover'); } }, onmouseleave: () => foco(i, false),
             onclick: () => { if (encerrado || !f.vivo) return; if (f.t === 'w') tentar(i); else usaPar(i); } }, c);
           if (!spans.has(i)) spans.set(i, []);
           spans.get(i).push(s);
@@ -1001,7 +1098,7 @@ const Jogos = {
         const r = Math.floor(i / p.n), k = r + ',' + (i % p.n);
         grade.append(h('button', { class: c.fixo ? 'fixo' : '', 'aria-label': c.papel === 'fonte' ? 'Fonte' : c.papel === 'alvo' ? 'Destino' : 'Peça linha ' + (r + 1) + ' coluna ' + (i % p.n + 1), disabled: fim, onclick: () => {
           if (c.fixo || fim) return;
-          c.r = (c.r + 1) % 4; ctx.som('click');
+          c.r = (c.r + 1) % 4; ctx.som('gira');
           if (circuitoFechado(p)) { fim = true; desenha(); ctx.ok(); return; }
           desenha();
         } }, desenho(giraMascara(c.m, c.r), vivos.has(k), c.papel)));
@@ -1022,7 +1119,7 @@ const Jogos = {
       });
       const abc = h('div', { class: 'alfabeto' }, [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((c) => h('button', { disabled: fim || !sel || Object.values(certo).includes(c), onclick: () => {
         if (pares[sel] === c) {
-          certo[sel] = c; sel = null; ctx.som('click');
+          certo[sel] = c; sel = null; ctx.som('seleciona');
           if (Object.keys(pares).every((k) => certo[k])) { fim = true; desenha(); ctx.ok(); return; }
         } else {
           erros++; ctx.som('erro');
@@ -1040,7 +1137,7 @@ const Jogos = {
     const celulas = Array.from({ length: p.n * p.n }, (_, i) => h('button', { 'aria-label': 'Casa ' + (i + 1), disabled: true, onclick: () => {
       if (tocando || fim || !vistas) return;
       if (i === p.seq[pos]) {
-        ctx.som('click'); pos++;
+        ctx.som('nota', i); pos++;
         celulas[i].classList.add('aceso'); setTimeout(() => celulas[i].classList.remove('aceso'), 140);
         if (pos === p.seq.length) { fim = true; msg.textContent = 'PADRÃO CONFIRMADO'; msg.className = 'grande ok'; bloqueia(true); acoes.replaceChildren(); ctx.ok(); }
       } else { fim = true; msg.textContent = 'PADRÃO INCORRETO'; msg.className = 'grande ruim'; bloqueia(true); acoes.replaceChildren(); ctx.falha('PADRÃO INCORRETO'); }
@@ -1052,7 +1149,7 @@ const Jogos = {
     const tocar = async () => {
       vistas++; tocando = true; pos = 0; bloqueia(true); desenhaAcoes();
       await espera(300);
-      for (const i of p.seq) { celulas[i].classList.add('aceso'); ctx.som('click'); await espera(p.mostra); celulas[i].classList.remove('aceso'); await espera(p.pausa); }
+      for (const i of p.seq) { celulas[i].classList.add('aceso'); ctx.som('nota', i); await espera(p.mostra); celulas[i].classList.remove('aceso'); await espera(p.pausa); }
       tocando = false; bloqueia(false); desenhaAcoes();
     };
     const desenhaAcoes = () => {
@@ -1089,7 +1186,8 @@ function telaJogador() {
   const finais = { desligado: ['SEM ENERGIA', 'Conexão encerrada.', ''], corrompido: ['SISTEMA CORROMPIDO', 'Setor de boot destruído.', ''], explodido: ['SINAL PERDIDO', 'Falha catastrófica no hardware.', ' explosao'] };
   const f = finais[prog.terminal];
   return h('div', { class: 'tela' },
-    h('div', { class: 'topo' }, h('div', {}, h('h1', {}, cenario.titulo), cenario.subtitulo ? h('small', {}, cenario.subtitulo) : null), h('span', { class: 'esp' }), prog.contagem ? h('span', { class: 'relogio', id: 'relogio' }, formata(restoContagem())) : null),
+    h('div', { class: 'topo' }, h('div', {}, h('h1', {}, cenario.titulo), cenario.subtitulo ? h('small', {}, cenario.subtitulo) : null), h('span', { class: 'esp' }), prog.contagem ? h('span', { class: 'relogio', id: 'relogio' }, formata(restoContagem())) : null,
+      cenario.sons ? h('button', { 'aria-pressed': mudo ? 'false' : 'true', onclick: () => { mudo = !mudo; grava('nt.mudo', mudo ? '1' : '0'); render(); } }, mudo ? 'SOM: OFF' : 'SOM: ON') : null),
     h('div', { class: 'colunas' }, cols),
     h('button', { class: 'acesso', title: 'Configuração', 'aria-label': 'Configuração', onclick: pedeSenha }, '⚙'),
     f ? h('div', { class: 'fim-tela' + f[2] }, h('h2', {}, f[0]), h('p', {}, f[1])) : null);
@@ -1232,7 +1330,7 @@ function renderTeste() {
   tela(caixa('Teste: ' + m.nome, h('div', { class: 'linha-meta' }, h('span', { class: 'alerta' }, 'Resposta: ' + m.puzzle.resposta), h('span', {}, 'Não altera o progresso dos jogadores')), area,
     h('div', { class: 'acoes' }, h('button', { onclick: () => { m.puzzle = null; const no = noPorId(selId); m.puzzle = gerar(no.protecao.puzzle, no.protecao.dificuldade, no.protecao.alvo); renderTeste(); } }, 'Gerar outro'))));
   const copia = JSON.parse(JSON.stringify(m.puzzle));
-  Jogos[copia.tipo](area, copia, { replays: m.replays, restantes: () => Infinity, ok: () => toast('Teste: vitória.'), falha: (t) => toast('Teste: ' + t), erro: () => false, repor: () => {}, som: () => {} });
+  Jogos[copia.tipo](area, copia, { replays: m.replays, restantes: () => Infinity, ok: () => toast('Teste: vitória.'), falha: (t) => toast('Teste: ' + t), erro: () => false, repor: () => {}, som: (nome, arg) => sfx(nome, arg, true) });
 }
 function abaGeral() {
   const b = cenario.boot;
@@ -1248,6 +1346,10 @@ function abaGeral() {
       campo('Tema', selecao(cenario, 'tema', Object.fromEntries(Object.entries(TEMAS).map(([k, v]) => [k, v.nome])), true)),
       campo('CRT', selecao(cenario, 'crt', { off: 'Desligado', leve: 'Leve', pesado: 'Pesado' })), campo('Degradação de sinal', selecao(cenario, 'sinal', { off: 'Desligada', leve: 'Leve', pesado: 'Pesada' })),
       h('div', { class: 'campo' }, marca(cenario, 'sons', 'Sons ligados'))),
+    h('h3', {}, 'Som'),
+    h('div', { class: 'campos' }, campo('Volume (0 a 100)', entradaNum(cenario, 'volume', { max: 100 })), campo('Ambiente contínuo', selecao(cenario, 'ambiente', { servidor: 'Sala de servidores', chuva: 'Chuva na cidade', off: 'Sem ambiente' })),
+      h('div', { class: 'campo' }, h('span', {}, 'Teste aqui'), h('button', { onclick: () => { if (cenario.ambiente === 'off') return toast('Escolha um ambiente.'); ligaAudio(); paraAmbiente(); saida.gain.value = volumeSaida(); tocaAmbiente(cenario.ambiente); setTimeout(paraAmbiente, 4000); } }, 'Ouvir ambiente (4s)'))),
+    h('div', { class: 'acoes' }, Object.entries(ROTULOS_SOM).map(([k, v]) => h('button', { onclick: () => { ligaAudio(); saida.gain.value = volumeSaida(); sfx(k, k === 'glitch' ? 900 : 3, true); } }, v))),
     h('h3', {}, 'Sequência de boot'),
     h('div', { class: 'campos' }, h('div', { class: 'campo' }, marca(b, 'ativo', 'Mostrar boot ao abrir'), marca(b, 'barra', 'Barra de progresso')), campo('Frequência', selecao(b, 'frequencia', { sessao: 'Uma vez por sessão do navegador', sempre: 'Sempre ao abrir' })), campo('Linhas', linhas, null, true)),
     h('h3', {}, 'Rolagens'),
@@ -1263,7 +1365,7 @@ function abaMacros() {
     h('div', { class: 'acoes', style: 'margin-bottom:12px' }, h('button', { class: 'forte', onclick: add }, '+ Macro')),
     cenario.macros.map((m) => h('fieldset', {}, h('legend', {}, m.rotulo), h('div', { class: 'campos' },
       campo('Nome', entradaTexto(m, 'rotulo')), campo('Atmosfera', selecao(m, 'atmos', ATM)), campo('Sinal', selecao(m, 'sinal', INT)), campo('CRT', selecao(m, 'crt', INT)),
-      campo('Glitch (ms)', entradaNum(m, 'glitchMs')), campo('Som', selecao(m, 'som', { '': 'Nenhum', alarme: 'Alarme', erro: 'Erro', ok: 'Sucesso', trava: 'Trava', boot: 'Boot' })), campo('Aviso na tela', entradaTexto(m, 'aviso'), null, true),
+      campo('Glitch (ms)', entradaNum(m, 'glitchMs')), campo('Som', selecao(m, 'som', { '': 'Nenhum', ...ROTULOS_SOM })), campo('Aviso na tela', entradaTexto(m, 'aviso'), null, true),
       h('div', { class: 'campo' }, marca(m.contagem, 'ativa', 'Inicia contagem regressiva', true)), m.contagem.ativa ? campo('Segundos', entradaNum(m.contagem, 'seg')) : null, m.contagem.ativa ? campo('Ao zerar', selecao(m.contagem, 'final', NOMES_FINAL)) : null),
     h('div', { class: 'acoes' }, h('button', { onclick: () => { aplicaMacro(m); commit(); toast('Macro disparada na tela dos jogadores.'); } }, 'Disparar agora'), h('button', { class: 'risco', onclick: () => confirmar('Excluir a macro "' + m.rotulo + '"?', () => { cenario.macros = cenario.macros.filter((x) => x !== m); salvaCenario(); render(); }) }, 'Excluir'))))));
 }
@@ -1358,7 +1460,7 @@ function tique() {
   const agora = Date.now();
   const r = document.documentElement;
   const glitch = prog.glitchAte > agora ? '1' : '0';
-  if (r.dataset.glitch !== glitch) r.dataset.glitch = glitch;
+  if (r.dataset.glitch !== glitch) { r.dataset.glitch = glitch; if (glitch === '1') sfx('glitch', prog.glitchMs || prog.glitchAte - agora); }
   let mudou = false;
   for (const [id, s] of Object.entries(prog.nos)) {
     const n = noPorId(id);
@@ -1372,6 +1474,11 @@ function tique() {
     }
   }
   const c = prog.contagem;
+  if (c && c.resto === null) {
+    const resto = c.ate - agora, marca = resto <= 0 ? 'zero' : resto <= 10000 ? 'f' + Math.floor(resto / 500) : resto <= 30000 ? 'a30' : resto <= 60000 ? 'a60' : 'n';
+    if (marca !== marcaContagem && marcaContagem !== null) { if (marca === 'zero') sfx('zerou'); else if (marca[0] === 'f') sfx('ticFinal', 20 - Math.floor(resto / 500)); else if (marca !== 'n') sfx('aviso'); }
+    marcaContagem = marca;
+  } else marcaContagem = null;
   if (c && c.resto === null && c.ate <= agora) {
     const m = { desligar: 'desligado', corromper: 'corrompido', explodir: 'explodido' };
     if (m[c.final]) prog.terminal = m[c.final];
@@ -1385,7 +1492,10 @@ function tique() {
     const tr = document.getElementById('trava-resto');
     if (tr && s.travadoAte) tr.textContent = formata(s.travadoAte - agora);
     const bar = document.getElementById('prazo-barra'), txt = document.getElementById('prazo-txt');
-    if (n && s.prazoAte && bar) { const t = (s.prazoAte - agora) / 1000; bar.style.width = Math.max(0, t / Number(n.protecao.tempo) * 100) + '%'; if (txt) txt.textContent = formata(t * 1000); }
+    if (n && s.prazoAte && bar) {
+      const t = (s.prazoAte - agora) / 1000; bar.style.width = Math.max(0, t / Number(n.protecao.tempo) * 100) + '%'; if (txt) txt.textContent = formata(t * 1000);
+      const seg = Math.ceil(t); if (seg <= 10 && seg !== marcaPrazo) { marcaPrazo = seg; sfx('tic'); }
+    }
   }
 }
 function mostraBoot() {
@@ -1394,20 +1504,22 @@ function mostraBoot() {
   sessaoGrava(chave, '1');
   const lista = h('div', {}), barra = h('i', { style: 'width:0' });
   const el = h('div', { class: 'boot' }, lista, b.barra ? h('div', { class: 'barra' }, barra) : null);
-  let i = 0, fim = false;
+  let i = 0, fim = false, rodando = false;
   const encerra = () => { if (!fim) { fim = true; el.remove(); } };
-  el.addEventListener('click', encerra);
-  document.body.append(el);
-  sfx('boot');
   const passo = () => {
     if (fim) return;
     if (i >= b.linhas.length) { setTimeout(encerra, 450); return; }
-    lista.append(h('div', {}, '> ' + b.linhas[i])); i++;
+    lista.append(h('div', {}, '> ' + b.linhas[i])); i++; sfx('linha');
     barra.style.width = (i / b.linhas.length * 100) + '%';
     setTimeout(passo, 420);
   };
-  passo();
+  const roda = () => { rodando = true; lista.replaceChildren(); liberaAudio(); sfx('boot'); passo(); };
+  el.addEventListener('click', () => { if (rodando) encerra(); else roda(); });
+  document.body.append(el);
+  if (cenario.sons) lista.append(h('button', { class: 'forte', onclick: (e) => { e.stopPropagation(); roda(); } }, 'CONECTAR'));
+  else roda();
 }
+function liberaAudio() { if (audioLiberado) return; audioLiberado = true; try { ligaAudio(); } catch { /* áudio indisponível */ } atualizaAmbiente(); }
 function telaErro(err) {
   document.getElementById('app').replaceChildren(h('div', { class: 'erro-carga' }, h('h2', {}, 'Não foi possível carregar o cenário'), h('p', {}, err.message),
     h('button', { onclick: () => { remove(NS + '.cenario'); remove(NS + '.prog'); history.replaceState(null, '', location.pathname); location.reload(); } }, 'Descartar e abrir o terminal padrão')));
@@ -1422,6 +1534,11 @@ async function inicia() {
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'm' && !mestre) { e.preventDefault(); pedeSenha(); }
     if (e.key === 'Escape' && modal && !confirmacao) fechaModal();
   });
+  mudo = ler('nt.mudo') === '1';
+  document.addEventListener('pointerdown', liberaAudio, { capture: true });
+  document.addEventListener('keydown', liberaAudio, { capture: true });
+  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('button'); if (b && !b.disabled && !b.closest('.bloco,.g-breach,.g-circ,.g-mem,.teclado,.alfabeto,.cifra,.boot')) sfx('click'); }, true);
+  document.addEventListener('pointerover', (e) => { if (e.pointerType !== 'mouse') return; const b = e.target.closest && e.target.closest('button:not(:disabled)'); if (b && b !== focoSom) sfx('hover'); focoSom = b; });
   render(); mostraBoot();
   setInterval(tique, 250);
 }
